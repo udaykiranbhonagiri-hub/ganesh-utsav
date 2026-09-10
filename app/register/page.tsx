@@ -1,23 +1,11 @@
 "use client";
 
-import { FormEvent, Suspense, useEffect, useMemo, useState } from "react";
+import { FormEvent, Suspense, useMemo, useState } from "react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 
 import { createClient } from "@/lib/supabase/client";
 import { saveParticipantId } from "@/lib/participant-session";
-
-type Team = {
-  id: string;
-  name: string;
-  shortName: string | null;
-};
-
-type PublicTeamMember = {
-  team_id: string;
-  team_name: string;
-  short_name: string | null;
-};
 
 export default function RegisterPage() {
   return (
@@ -39,43 +27,9 @@ function RegisterPageContent() {
   const [fullName, setFullName] = useState("");
   const [phone, setPhone] = useState("");
   const [roomNumber, setRoomNumber] = useState("");
-  const [teamId, setTeamId] = useState("");
-  const [teams, setTeams] = useState<Team[]>([]);
-
-  const [loadingTeams, setLoadingTeams] = useState(true);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
-
-  useEffect(() => {
-    async function loadTeams() {
-      const { data, error: teamsError } = await supabase.rpc(
-        "get_public_team_members",
-      );
-
-      if (teamsError) {
-        setError("Unable to load teams. Please try again shortly.");
-        setLoadingTeams(false);
-        return;
-      }
-
-      const uniqueTeams = new Map<string, Team>();
-      for (const row of (data ?? []) as PublicTeamMember[]) {
-        if (!uniqueTeams.has(row.team_id)) {
-          uniqueTeams.set(row.team_id, {
-            id: row.team_id,
-            name: row.team_name,
-            shortName: row.short_name,
-          });
-        }
-      }
-
-      setTeams(Array.from(uniqueTeams.values()));
-      setLoadingTeams(false);
-    }
-
-    loadTeams();
-  }, [supabase]);
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -92,17 +46,12 @@ function RegisterPageContent() {
         throw new Error("Please enter your phone number.");
       }
 
-      if (!teamId) {
-        throw new Error("Please choose your team.");
-      }
-
       const { data: participant, error: participantError } = await supabase
         .from("participants")
         .insert({
           full_name: fullName.trim(),
           phone: phone.trim(),
           room_number: roomNumber.trim() || null,
-          team_id: teamId,
         })
         .select("id")
         .single();
@@ -112,7 +61,7 @@ function RegisterPageContent() {
       }
 
       saveParticipantId(participant.id);
-      setSuccess("Your participant registration and team selection are saved.");
+      setSuccess("Your participant registration is saved.");
     } catch (err) {
       setError(
         err instanceof Error
@@ -145,8 +94,8 @@ function RegisterPageContent() {
             </h1>
 
             <p className="mt-2 text-gray-600">
-              Register once, select your team, then choose the games you want
-              to play. No login is needed.
+              Register once, then choose the games you want to play. No login
+              is needed.
             </p>
           </div>
 
@@ -219,39 +168,6 @@ function RegisterPageContent() {
                 />
               </div>
 
-              <div>
-                <label
-                  htmlFor="team"
-                  className="mb-2 block text-sm font-semibold text-gray-700"
-                >
-                  Choose Your Team
-                </label>
-
-                <select
-                  id="team"
-                  value={teamId}
-                  onChange={(e) => setTeamId(e.target.value)}
-                  required
-                  disabled={loadingTeams || teams.length === 0}
-                  className="w-full rounded-xl border border-gray-300 bg-white px-4 py-3 text-gray-900 outline-none focus:border-orange-500 focus:ring-2 focus:ring-orange-200 disabled:cursor-not-allowed disabled:bg-gray-100"
-                >
-                  <option value="">
-                    {loadingTeams ? "Loading teams..." : "Select a team"}
-                  </option>
-                  {teams.map((team) => (
-                    <option key={team.id} value={team.id}>
-                      {team.shortName ? `${team.shortName} — ` : ""}
-                      {team.name}
-                    </option>
-                  ))}
-                </select>
-                {!loadingTeams && teams.length === 0 && !error && (
-                  <p className="mt-2 text-sm text-red-700">
-                    No teams are available yet. Please contact an organizer.
-                  </p>
-                )}
-              </div>
-
               {error && (
                 <div className="rounded-xl bg-red-50 px-4 py-3 text-sm text-red-700">
                   {error}
@@ -260,7 +176,7 @@ function RegisterPageContent() {
 
               <button
                 type="submit"
-                disabled={loading || loadingTeams || teams.length === 0}
+                disabled={loading}
                 className="w-full rounded-xl bg-orange-600 px-5 py-4 font-bold text-white hover:bg-orange-700 disabled:cursor-not-allowed disabled:opacity-50"
               >
                 {loading ? "Registering..." : "Save Registration"}

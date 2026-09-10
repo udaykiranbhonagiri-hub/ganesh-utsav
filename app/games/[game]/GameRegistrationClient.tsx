@@ -96,7 +96,7 @@ export default function GameRegistrationClient({ gameSlug }: Props) {
       }
 
       if (!participantId) {
-        throw new Error("Please register as a participant and choose your team first.");
+        throw new Error("Please register as a participant first.");
       }
 
       if (!game.registration_open) {
@@ -197,21 +197,20 @@ export default function GameRegistrationClient({ gameSlug }: Props) {
                   <div className="mt-6 rounded-xl bg-orange-50 p-5 text-gray-700">
                     <p className="font-bold">Register before choosing a game</p>
                     <p className="mt-1 text-sm">
-                      First register as a participant and choose your team. You
-                      do not need to create an account or log in.
+                      First register as a participant. You do not need to
+                      create an account or log in.
                     </p>
                     <Link
                       href={registrationPath}
                       className="mt-4 inline-block rounded-xl bg-orange-600 px-5 py-3 font-semibold text-white hover:bg-orange-700"
                     >
-                      Register and choose a team
+                      Register as a participant
                     </Link>
                   </div>
                 ) : (
                   <form onSubmit={handleRegister} className="mt-8 space-y-5">
                     <div className="rounded-xl bg-orange-50 p-4 text-sm text-gray-700">
-                      Your participant registration and team selection will be
-                      used for this game.
+                      Your participant registration will be used for this game.
                     </div>
 
                     {error && (

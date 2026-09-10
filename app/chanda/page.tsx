@@ -25,14 +25,16 @@ export default function ChandaPage() {
    * Dynamic UPI payment URL.
    * The QR changes automatically when the amount changes.
    */
+  const numericAmount = Number(amount);
+  const hasValidAmount = Number.isFinite(numericAmount) && numericAmount > 0;
   const upiUrl =
-    UPI_ID && Number(amount) > 0
+    UPI_ID && hasValidAmount
       ? `upi://pay?pa=${encodeURIComponent(
           UPI_ID
         )}&pn=${encodeURIComponent(
           UPI_NAME
         )}&am=${encodeURIComponent(
-          Number(amount).toFixed(2)
+          numericAmount.toFixed(2)
         )}&cu=INR`
       : "";
 
@@ -125,8 +127,8 @@ export default function ChandaPage() {
               </h2>
 
               <p className="mt-2 text-sm text-gray-600">
-                Enter the amount, then scan the QR code to make your
-                UPI payment.
+                Enter the amount, then scan the QR code or open an installed
+                UPI app to make your payment.
               </p>
 
               {/* Amount */}
@@ -182,7 +184,12 @@ export default function ChandaPage() {
               {/* QR */}
               <div className="mt-6">
                 <div className="mx-auto flex h-64 w-64 items-center justify-center rounded-2xl border bg-white p-4">
-                  {upiUrl ? (
+                  {!UPI_ID ? (
+                    <p className="px-6 text-center text-sm text-red-600">
+                      UPI payments have not been configured yet. Please contact
+                      an organizer.
+                    </p>
+                  ) : upiUrl ? (
                     <QRCodeSVG
                       value={upiUrl}
                       size={220}
@@ -191,8 +198,7 @@ export default function ChandaPage() {
                     />
                   ) : (
                     <p className="px-6 text-center text-sm text-gray-500">
-                      Enter the Chanda amount to generate the
-                      payment QR.
+                      Enter a valid Chanda amount to generate the payment QR.
                     </p>
                   )}
                 </div>
@@ -212,6 +218,22 @@ export default function ChandaPage() {
                   Scan the QR code with your UPI app, complete the
                   payment, then enter your transaction details below.
                 </p>
+
+                {upiUrl && (
+                  <a
+                    href={upiUrl}
+                    className="mt-4 inline-flex rounded-xl bg-orange-600 px-5 py-3 font-semibold text-white hover:bg-orange-700"
+                  >
+                    Open UPI app to pay ₹{numericAmount.toFixed(2)}
+                  </a>
+                )}
+
+                {upiUrl && (
+                  <p className="mt-3 text-xs text-gray-500">
+                    On a mobile phone, this opens an installed UPI app such as
+                    Google Pay, PhonePe, Paytm, or BHIM.
+                  </p>
+                )}
               </div>
             </div>
 

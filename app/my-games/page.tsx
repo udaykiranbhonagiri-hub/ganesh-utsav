@@ -160,14 +160,14 @@ export default function MyGamesPage() {
               </h2>
 
               <p className="mt-2 text-gray-500">
-                Register and choose your team before viewing or joining games.
+                Register as a participant before viewing or joining games.
               </p>
 
               <Link
                 href="/register?next=/my-games"
                 className="mt-6 inline-block rounded-xl bg-orange-600 px-5 py-3 font-semibold text-white hover:bg-orange-700"
               >
-                Register and choose a team
+                Register as a participant
               </Link>
             </div>
           )}

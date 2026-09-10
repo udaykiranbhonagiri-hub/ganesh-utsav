@@ -93,15 +93,15 @@ export default function GamesPage() {
           </h1>
 
           <p className="mt-3 max-w-2xl text-gray-600">
-            First register as a participant and choose your team, then join
-            the games and activities planned during the Utsav.
+            First register as a participant, then join the games and
+            activities planned during the Utsav.
           </p>
 
           <Link
             href="/register?next=/games"
             className="mt-6 inline-block rounded-xl bg-orange-600 px-5 py-3 font-semibold text-white hover:bg-orange-700"
           >
-            Register and choose a team
+            Register as a participant
           </Link>
         </div>
       </section>
