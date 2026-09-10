@@ -1,6 +1,6 @@
 "use client";
 
-import { FormEvent, useEffect, useMemo, useState } from "react";
+import { FormEvent, Suspense, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 
@@ -20,6 +20,14 @@ type PublicTeamMember = {
 };
 
 export default function RegisterPage() {
+  return (
+    <Suspense fallback={<RegistrationLoading />}>
+      <RegisterPageContent />
+    </Suspense>
+  );
+}
+
+function RegisterPageContent() {
   const supabase = useMemo(() => createClient(), []);
   const searchParams = useSearchParams();
   const requestedPath = searchParams.get("next");
@@ -260,6 +268,16 @@ export default function RegisterPage() {
             </form>
           )}
         </section>
+      </div>
+    </main>
+  );
+}
+
+function RegistrationLoading() {
+  return (
+    <main className="min-h-screen bg-orange-50 px-4 py-10">
+      <div className="mx-auto max-w-lg rounded-3xl bg-white p-8 text-center shadow-lg">
+        Loading registration...
       </div>
     </main>
   );
