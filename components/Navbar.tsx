@@ -38,13 +38,6 @@ export default function Navbar() {
               {link.name}
             </Link>
           ))}
-
-          <Link
-            href="/register"
-            className="ml-2 rounded-xl bg-orange-600 px-4 py-2 font-semibold text-white transition hover:bg-orange-700"
-          >
-            Register
-          </Link>
         </nav>
 
         {/* Mobile buttons */}
@@ -83,13 +76,7 @@ export default function Navbar() {
               </Link>
             ))}
 
-            <Link
-              href="/register"
-              onClick={() => setOpen(false)}
-              className="mt-2 block rounded-xl bg-orange-600 px-4 py-3 text-center font-semibold text-white"
-            >
-              Participant Registration
-            </Link>
+            
           </nav>
         </div>
       )}

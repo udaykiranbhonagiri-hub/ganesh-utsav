@@ -1,16 +1,16 @@
+"use client";
+
+import { useEffect, useState } from "react";
 import Link from "next/link";
-import { redirect } from "next/navigation";
+import { useRouter } from "next/navigation";
 
-import { createClient } from "@/lib/supabase/server";
-
-export const instant = false;
+import { createClient } from "@/lib/supabase/client";
 
 type Participant = {
   id: string;
-  full_name: string | null;
-  phone: string | null;
+  full_name: string;
+  phone: string;
   room_number: string | null;
-  role: string;
   team_id: string | null;
   created_at: string;
 };
@@ -20,81 +20,138 @@ type Team = {
   name: string;
 };
 
-export default async function AdminParticipantsPage() {
-  const supabase = await createClient();
+export default function AdminParticipantsPage() {
+  const router = useRouter();
+  const supabase = createClient();
 
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  const [participants, setParticipants] = useState<Participant[]>([]);
+  const [teams, setTeams] = useState<Team[]>([]);
 
-  if (!user) {
-    redirect("/login");
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
+  const [saving, setSaving] = useState<string | null>(null);
+
+  async function loadData() {
+    setLoading(true);
+    setError("");
+
+    try {
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
+
+      if (!user) {
+        router.replace("/login");
+        return;
+      }
+
+      const { data: profile, error: profileError } =
+        await supabase
+          .from("profiles")
+          .select("role")
+          .eq("id", user.id)
+          .single();
+
+      if (profileError) {
+        throw profileError;
+      }
+
+      if (
+        profile?.role !== "super_admin" &&
+        profile?.role !== "event_admin"
+      ) {
+        router.replace("/");
+        return;
+      }
+
+      const [
+        { data: participantData, error: participantError },
+        { data: teamData, error: teamError },
+      ] = await Promise.all([
+        supabase
+          .from("participants")
+          .select(
+            "id, full_name, phone, room_number, team_id, created_at"
+          )
+          .order("created_at", { ascending: false }),
+
+        supabase
+          .from("teams")
+          .select("id, name")
+          .order("name", { ascending: true }),
+      ]);
+
+      if (participantError) {
+        throw participantError;
+      }
+
+      if (teamError) {
+        throw teamError;
+      }
+
+      setParticipants(participantData ?? []);
+      setTeams(teamData ?? []);
+    } catch (err) {
+      setError(
+        err instanceof Error
+          ? err.message
+          : "Unable to load participants."
+      );
+    } finally {
+      setLoading(false);
+    }
   }
 
-  const { data: profile } = await supabase
-    .from("profiles")
-    .select("role")
-    .eq("id", user.id)
-    .single();
+  useEffect(() => {
+    loadData();
+  }, []);
 
-  const isAdmin =
-    profile?.role === "super_admin" ||
-    profile?.role === "event_admin";
+  async function assignTeam(
+    participantId: string,
+    teamId: string
+  ) {
+    setSaving(participantId);
+    setError("");
 
-  if (!isAdmin) {
-    redirect("/");
-  }
+    const { error: updateError } = await supabase
+      .from("participants")
+      .update({
+        team_id: teamId === "none" ? null : teamId,
+      })
+      .eq("id", participantId);
 
-  const [
-    { data: participants, error: participantError },
-    { data: teams, error: teamError },
-  ] = await Promise.all([
-    supabase
-      .from("profiles")
-      .select(
-        "id, full_name, phone, room_number, role, team_id, created_at"
+    if (updateError) {
+      setError(updateError.message);
+      setSaving(null);
+      return;
+    }
+
+    setParticipants((current) =>
+      current.map((participant) =>
+        participant.id === participantId
+          ? {
+              ...participant,
+              team_id:
+                teamId === "none" ? null : teamId,
+            }
+          : participant
       )
-      .order("created_at", { ascending: false }),
-
-    supabase
-      .from("teams")
-      .select("id, name")
-      .order("name", { ascending: true }),
-  ]);
-
-  if (participantError || teamError) {
-    return (
-      <main className="min-h-screen bg-orange-50 p-6">
-        <div className="mx-auto max-w-6xl">
-          <Link
-            href="/admin"
-            className="text-sm font-medium text-orange-700 hover:underline"
-          >
-            ← Admin Dashboard
-          </Link>
-
-          <div className="mt-6 rounded-2xl bg-red-50 p-5 text-red-700">
-            Unable to load participants or teams.
-          </div>
-        </div>
-      </main>
     );
-  }
 
-  const items: Participant[] = participants ?? [];
-  const teamList: Team[] = teams ?? [];
+    setSaving(null);
+  }
 
   return (
     <main className="min-h-screen bg-orange-50">
       <header className="border-b bg-white">
-        <div className="mx-auto flex max-w-6xl items-center justify-between px-6 py-4">
+        <div className="mx-auto flex max-w-6xl items-center justify-between px-4 py-4 md:px-6">
           <div>
             <p className="text-sm font-semibold uppercase tracking-wider text-orange-600">
               Ganesh Utsav 2026
             </p>
 
             <h1 className="text-xl font-bold text-gray-900">
-              Admin
+              Admin — Participants
             </h1>
           </div>
 
@@ -116,75 +173,97 @@ export default async function AdminParticipantsPage() {
             ← Admin Dashboard
           </Link>
 
-          <div className="mt-5">
-            <p className="text-sm font-semibold uppercase tracking-wider text-orange-600">
-              Event Management
-            </p>
+          <div className="mt-6 flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
+            <div>
+              <p className="text-sm font-semibold uppercase tracking-wider text-orange-600">
+                Event Management
+              </p>
 
-            <h2 className="mt-1 text-3xl font-bold text-gray-900">
-              Participants
-            </h2>
+              <h2 className="mt-1 text-3xl font-bold text-gray-900">
+                Participants
+              </h2>
 
-            <p className="mt-2 text-gray-600">
-              Assign registered participants to event teams.
-            </p>
+              <p className="mt-2 text-gray-600">
+                Manage people registered for games.
+              </p>
+            </div>
+
+            <div className="rounded-xl bg-white px-5 py-3 shadow">
+              <p className="text-sm text-gray-500">
+                Total Participants
+              </p>
+
+              <p className="text-2xl font-bold text-orange-600">
+                {participants.length}
+              </p>
+            </div>
           </div>
 
+          {error && (
+            <div className="mt-6 rounded-xl bg-red-50 p-4 text-sm text-red-700">
+              {error}
+            </div>
+          )}
+
           <div className="mt-8 overflow-hidden rounded-2xl bg-white shadow">
-            {items.length === 0 ? (
-              <div className="px-6 py-12 text-center">
+            {loading ? (
+              <div className="p-10 text-center text-gray-500">
+                Loading participants...
+              </div>
+            ) : participants.length === 0 ? (
+              <div className="p-10 text-center">
                 <p className="font-semibold text-gray-800">
-                  No participants yet.
+                  No participants registered yet.
                 </p>
 
                 <p className="mt-2 text-sm text-gray-500">
-                  Registered users will appear here.
+                  People who register for games will appear here.
                 </p>
               </div>
             ) : (
               <div className="overflow-x-auto">
-                <table className="w-full min-w-[900px]">
+                <table className="w-full min-w-[850px]">
                   <thead className="bg-gray-50">
                     <tr>
-                      <th className="px-6 py-4 text-left text-sm font-semibold text-gray-700">
+                      <th className="px-6 py-4 text-left text-sm font-semibold">
                         Name
                       </th>
 
-                      <th className="px-6 py-4 text-left text-sm font-semibold text-gray-700">
+                      <th className="px-6 py-4 text-left text-sm font-semibold">
                         Phone
                       </th>
 
-                      <th className="px-6 py-4 text-left text-sm font-semibold text-gray-700">
+                      <th className="px-6 py-4 text-left text-sm font-semibold">
                         Room
                       </th>
 
-                      <th className="px-6 py-4 text-left text-sm font-semibold text-gray-700">
-                        Current Team
+                      <th className="px-6 py-4 text-left text-sm font-semibold">
+                        Team
                       </th>
 
-                      <th className="px-6 py-4 text-left text-sm font-semibold text-gray-700">
-                        Assign Team
+                      <th className="px-6 py-4 text-left text-sm font-semibold">
+                        Registered
                       </th>
                     </tr>
                   </thead>
 
                   <tbody>
-                    {items.map((participant) => {
-                      const currentTeam = teamList.find(
+                    {participants.map((participant) => {
+                      const currentTeam = teams.find(
                         (team) => team.id === participant.team_id
                       );
 
                       return (
                         <tr
                           key={participant.id}
-                          className="border-t hover:bg-orange-50"
+                          className="border-t"
                         >
-                          <td className="px-6 py-4 font-medium text-gray-900">
-                            {participant.full_name || "Unnamed"}
+                          <td className="px-6 py-4 font-medium">
+                            {participant.full_name}
                           </td>
 
                           <td className="px-6 py-4 text-gray-600">
-                            {participant.phone || "-"}
+                            {participant.phone}
                           </td>
 
                           <td className="px-6 py-4 text-gray-600">
@@ -192,123 +271,40 @@ export default async function AdminParticipantsPage() {
                           </td>
 
                           <td className="px-6 py-4">
-                            {currentTeam ? (
-                              <span className="rounded-full bg-orange-100 px-3 py-1 text-xs font-semibold text-orange-700">
-                                {currentTeam.name}
-                              </span>
-                            ) : (
-                              <span className="text-sm text-gray-400">
-                                Not assigned
-                              </span>
-                            )}
+                            <select
+                              value={
+                                participant.team_id ?? "none"
+                              }
+                              disabled={
+                                saving === participant.id
+                              }
+                              onChange={(e) =>
+                                assignTeam(
+                                  participant.id,
+                                  e.target.value
+                                )
+                              }
+                              className="rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm outline-none focus:border-orange-500"
+                            >
+                              <option value="none">
+                                No Team
+                              </option>
+
+                              {teams.map((team) => (
+                                <option
+                                  key={team.id}
+                                  value={team.id}
+                                >
+                                  {team.name}
+                                </option>
+                              ))}
+                            </select>
                           </td>
 
-                          <td className="px-6 py-4">
-                            <form
-                              action={async (formData) => {
-                                "use server";
-
-                                const teamId =
-                                  formData.get("team_id");
-
-                                const participantId =
-                                  formData.get("participant_id");
-
-                                const serverSupabase =
-                                  await createClient();
-
-                                const {
-                                  data: {
-                                    user: currentUser,
-                                  },
-                                } =
-                                  await serverSupabase.auth.getUser();
-
-                                if (!currentUser) {
-                                  redirect("/login");
-                                }
-
-                                const {
-                                  data: adminProfile,
-                                } =
-                                  await serverSupabase
-                                    .from("profiles")
-                                    .select("role")
-                                    .eq(
-                                      "id",
-                                      currentUser.id
-                                    )
-                                    .single();
-
-                                if (
-                                  adminProfile?.role !==
-                                    "super_admin" &&
-                                  adminProfile?.role !==
-                                    "event_admin"
-                                ) {
-                                  redirect("/");
-                                }
-
-                                const { error } =
-                                  await serverSupabase
-                                    .from("profiles")
-                                    .update({
-                                      team_id:
-                                        teamId === "none"
-                                          ? null
-                                          : teamId,
-                                    })
-                                    .eq(
-                                      "id",
-                                      participantId
-                                    );
-
-                                if (error) {
-                                  throw new Error(
-                                    error.message
-                                  );
-                                }
-
-                                redirect(
-                                  "/admin/participants"
-                                );
-                              }}
-                              className="flex items-center gap-2"
-                            >
-                              <input
-                                type="hidden"
-                                name="participant_id"
-                                value={participant.id}
-                              />
-
-                              <select
-                                name="team_id"
-                                defaultValue={
-                                  participant.team_id ?? "none"
-                                }
-                                className="rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm outline-none focus:border-orange-500"
-                              >
-                                <option value="none">
-                                  No Team
-                                </option>
-
-                                {teamList.map((team) => (
-                                  <option
-                                    key={team.id}
-                                    value={team.id}
-                                  >
-                                    {team.name}
-                                  </option>
-                                ))}
-                              </select>
-
-                              <button
-                                type="submit"
-                                className="rounded-lg bg-orange-600 px-3 py-2 text-sm font-semibold text-white hover:bg-orange-700"
-                              >
-                                Save
-                              </button>
-                            </form>
+                          <td className="px-6 py-4 text-sm text-gray-500">
+                            {new Date(
+                              participant.created_at
+                            ).toLocaleString("en-IN")}
                           </td>
                         </tr>
                       );

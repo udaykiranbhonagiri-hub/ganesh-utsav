@@ -1,7 +1,7 @@
 "use client";
 
+import { FormEvent, useEffect, useState } from "react";
 import Link from "next/link";
-import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 
 import { createClient } from "@/lib/supabase/client";
@@ -36,9 +36,15 @@ export default function GameRegistrationClient({
   const displayName = gameNames[gameSlug];
 
   const [game, setGame] = useState<Game | null>(null);
+
+  const [name, setName] = useState("");
+  const [phone, setPhone] = useState("");
+  const [roomNumber, setRoomNumber] = useState("");
+
   const [loading, setLoading] = useState(true);
   const [registering, setRegistering] = useState(false);
-  const [message, setMessage] = useState("");
+
+  const [success, setSuccess] = useState("");
   const [error, setError] = useState("");
 
   useEffect(() => {
@@ -48,9 +54,6 @@ export default function GameRegistrationClient({
     }
 
     async function loadGame() {
-      setLoading(true);
-      setError("");
-
       const { data, error: gameError } = await supabase
         .from("games")
         .select(
@@ -66,9 +69,7 @@ export default function GameRegistrationClient({
       }
 
       if (!data) {
-        setError(
-          "This game has not been configured by the administrator yet."
-        );
+        setError("This game has not been configured yet.");
         setLoading(false);
         return;
       }
@@ -78,79 +79,73 @@ export default function GameRegistrationClient({
     }
 
     loadGame();
-  }, [displayName, router, supabase]);
+  }, [displayName, router]);
 
-  async function handleRegister() {
+  async function handleRegister(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+
     setRegistering(true);
     setError("");
-    setMessage("");
+    setSuccess("");
 
     try {
-      const {
-        data: { user },
-        error: userError,
-      } = await supabase.auth.getUser();
-
-      if (userError) {
-        throw userError;
-      }
-
-      if (!user) {
-        router.push(
-          `/login?next=/games/${encodeURIComponent(gameSlug)}`
-        );
-        return;
-      }
-
       if (!game) {
         throw new Error("Game information is unavailable.");
       }
 
+      if (!name.trim()) {
+        throw new Error("Please enter your name.");
+      }
+
+      if (!phone.trim()) {
+        throw new Error("Please enter your phone number.");
+      }
+
       if (!game.registration_open) {
-        throw new Error(
-          "Registration for this game is currently closed."
-        );
+        throw new Error("Registration for this game is closed.");
       }
 
-      const { data: existingRegistration, error: existingError } =
+      // Create participant
+      const { data: participant, error: participantError } =
         await supabase
-          .from("registrations")
+          .from("participants")
+          .insert({
+            full_name: name.trim(),
+            phone: phone.trim(),
+            room_number: roomNumber.trim() || null,
+          })
           .select("id")
-          .eq("game_id", game.id)
-          .eq("user_id", user.id)
-          .maybeSingle();
+          .single();
 
-      if (existingError) {
-        throw existingError;
+      if (participantError) {
+        throw participantError;
       }
 
-      if (existingRegistration) {
-        setMessage(
-          `You are already registered for ${game.name}.`
-        );
-        return;
-      }
-
-      const { error: insertError } = await supabase
+      // Create game registration
+      const { error: registrationError } = await supabase
         .from("registrations")
         .insert({
+          participant_id: participant.id,
           game_id: game.id,
-          user_id: user.id,
           status: "confirmed",
         });
 
-      if (insertError) {
-        throw insertError;
+      if (registrationError) {
+        throw registrationError;
       }
 
-      setMessage(
-        `Successfully registered for ${game.name}.`
+      setSuccess(
+        `You have successfully registered for ${game.name}.`
       );
+
+      setName("");
+      setPhone("");
+      setRoomNumber("");
     } catch (err) {
       setError(
         err instanceof Error
           ? err.message
-          : "Unable to register for this game."
+          : "Unable to complete registration."
       );
     } finally {
       setRegistering(false);
@@ -159,9 +154,8 @@ export default function GameRegistrationClient({
 
   return (
     <main className="min-h-screen bg-orange-50">
-      {/* Header */}
       <header className="border-b bg-white">
-        <div className="mx-auto flex max-w-6xl items-center justify-between px-6 py-4">
+        <div className="mx-auto flex max-w-6xl items-center justify-between px-4 py-4">
           <Link
             href="/"
             className="text-xl font-bold text-orange-600"
@@ -178,8 +172,7 @@ export default function GameRegistrationClient({
         </div>
       </header>
 
-      {/* Content */}
-      <section className="px-6 py-12">
+      <section className="px-4 py-10 md:px-6">
         <div className="mx-auto max-w-2xl">
           <Link
             href="/games"
@@ -190,7 +183,7 @@ export default function GameRegistrationClient({
 
           <div className="mt-5 rounded-3xl bg-white p-6 shadow-lg md:p-8">
             <p className="text-sm font-semibold uppercase tracking-wider text-orange-600">
-              Game Registration
+              Participant Registration
             </p>
 
             <h1 className="mt-2 text-3xl font-bold text-gray-900">
@@ -212,52 +205,102 @@ export default function GameRegistrationClient({
                     "Register for this Ganesh Utsav activity."}
                 </p>
 
-                {game.max_players !== null && (
-                  <div className="mt-5 rounded-xl bg-orange-50 p-4">
-                    <p className="text-sm text-gray-500">
-                      Maximum participants
-                    </p>
-
-                    <p className="mt-1 text-xl font-bold text-orange-700">
-                      {game.max_players}
-                    </p>
-                  </div>
-                )}
-
                 {!game.registration_open ? (
                   <div className="mt-6 rounded-xl bg-red-50 p-4 text-sm text-red-700">
-                    Registration for this game is currently closed.
+                    Registration is currently closed.
                   </div>
                 ) : (
-                  <button
-                    type="button"
-                    onClick={handleRegister}
-                    disabled={registering}
-                    className="mt-8 w-full rounded-xl bg-orange-600 px-5 py-4 font-bold text-white hover:bg-orange-700 disabled:cursor-not-allowed disabled:opacity-50"
+                  <form
+                    onSubmit={handleRegister}
+                    className="mt-8 space-y-5"
                   >
-                    {registering
-                      ? "Registering..."
-                      : `Register for ${game.name}`}
-                  </button>
-                )}
+                    <div>
+                      <label
+                        htmlFor="name"
+                        className="mb-2 block text-sm font-semibold text-gray-700"
+                      >
+                        Full Name
+                      </label>
 
-                {error && (
-                  <div className="mt-4 rounded-xl bg-red-50 p-4 text-sm text-red-700">
-                    {error}
-                  </div>
-                )}
+                      <input
+                        id="name"
+                        type="text"
+                        value={name}
+                        onChange={(e) => setName(e.target.value)}
+                        placeholder="Enter your name"
+                        required
+                        className="w-full rounded-xl border border-gray-300 px-4 py-3 outline-none focus:border-orange-500 focus:ring-2 focus:ring-orange-200"
+                      />
+                    </div>
 
-                {message && (
-                  <div className="mt-4 rounded-xl bg-green-50 p-4 text-sm text-green-700">
-                    {message}
-                  </div>
+                    <div>
+                      <label
+                        htmlFor="phone"
+                        className="mb-2 block text-sm font-semibold text-gray-700"
+                      >
+                        Phone Number
+                      </label>
+
+                      <input
+                        id="phone"
+                        type="tel"
+                        value={phone}
+                        onChange={(e) => setPhone(e.target.value)}
+                        placeholder="Enter phone number"
+                        required
+                        className="w-full rounded-xl border border-gray-300 px-4 py-3 outline-none focus:border-orange-500 focus:ring-2 focus:ring-orange-200"
+                      />
+                    </div>
+
+                    <div>
+                      <label
+                        htmlFor="room"
+                        className="mb-2 block text-sm font-semibold text-gray-700"
+                      >
+                        Room Number
+                      </label>
+
+                      <input
+                        id="room"
+                        type="text"
+                        value={roomNumber}
+                        onChange={(e) => setRoomNumber(e.target.value)}
+                        placeholder="Optional"
+                        className="w-full rounded-xl border border-gray-300 px-4 py-3 outline-none focus:border-orange-500 focus:ring-2 focus:ring-orange-200"
+                      />
+                    </div>
+
+                    {error && (
+                      <div className="rounded-xl bg-red-50 p-4 text-sm text-red-700">
+                        {error}
+                      </div>
+                    )}
+
+                    {success && (
+                      <div className="rounded-xl bg-green-50 p-4 text-sm text-green-700">
+                        <p className="font-bold">
+                          ✓ Registration successful
+                        </p>
+
+                        <p className="mt-1">
+                          {success}
+                        </p>
+                      </div>
+                    )}
+
+                    <button
+                      type="submit"
+                      disabled={registering}
+                      className="w-full rounded-xl bg-orange-600 px-5 py-4 font-bold text-white hover:bg-orange-700 disabled:cursor-not-allowed disabled:opacity-50"
+                    >
+                      {registering
+                        ? "Registering..."
+                        : `Register for ${game.name}`}
+                    </button>
+                  </form>
                 )}
               </>
-            ) : (
-              <div className="mt-6 rounded-xl bg-yellow-50 p-4 text-sm text-yellow-800">
-                This game has not been configured yet.
-              </div>
-            )}
+            ) : null}
           </div>
         </div>
       </section>
