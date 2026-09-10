@@ -1,9 +1,10 @@
 "use client";
 
-import { FormEvent, useEffect, useState } from "react";
+import { FormEvent, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 
+import { getSavedParticipantId } from "@/lib/participant-session";
 import { createClient } from "@/lib/supabase/client";
 
 type Game = {
@@ -27,25 +28,26 @@ const gameNames: Record<string, string> = {
   fun: "Fun Games",
 };
 
-export default function GameRegistrationClient({
-  gameSlug,
-}: Props) {
+export default function GameRegistrationClient({ gameSlug }: Props) {
   const router = useRouter();
-  const supabase = createClient();
-
+  const supabase = useMemo(() => createClient(), []);
   const displayName = gameNames[gameSlug];
+  const registrationPath = `/register?next=${encodeURIComponent(
+    `/games/${gameSlug}`,
+  )}`;
 
   const [game, setGame] = useState<Game | null>(null);
-
-  const [name, setName] = useState("");
-  const [phone, setPhone] = useState("");
-  const [roomNumber, setRoomNumber] = useState("");
-
+  const [participantId, setParticipantId] = useState<string | null>(null);
+  const [participantChecked, setParticipantChecked] = useState(false);
   const [loading, setLoading] = useState(true);
   const [registering, setRegistering] = useState(false);
-
   const [success, setSuccess] = useState("");
   const [error, setError] = useState("");
+
+  useEffect(() => {
+    setParticipantId(getSavedParticipantId());
+    setParticipantChecked(true);
+  }, []);
 
   useEffect(() => {
     if (!displayName) {
@@ -57,7 +59,7 @@ export default function GameRegistrationClient({
       const { data, error: gameError } = await supabase
         .from("games")
         .select(
-          "id, name, game_type, description, max_players, registration_open"
+          "id, name, game_type, description, max_players, registration_open",
         )
         .eq("name", displayName)
         .maybeSingle();
@@ -79,7 +81,7 @@ export default function GameRegistrationClient({
     }
 
     loadGame();
-  }, [displayName, router]);
+  }, [displayName, router, supabase]);
 
   async function handleRegister(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -93,39 +95,18 @@ export default function GameRegistrationClient({
         throw new Error("Game information is unavailable.");
       }
 
-      if (!name.trim()) {
-        throw new Error("Please enter your name.");
-      }
-
-      if (!phone.trim()) {
-        throw new Error("Please enter your phone number.");
+      if (!participantId) {
+        throw new Error("Please register as a participant and choose your team first.");
       }
 
       if (!game.registration_open) {
         throw new Error("Registration for this game is closed.");
       }
 
-      // Create participant
-      const { data: participant, error: participantError } =
-        await supabase
-          .from("participants")
-          .insert({
-            full_name: name.trim(),
-            phone: phone.trim(),
-            room_number: roomNumber.trim() || null,
-          })
-          .select("id")
-          .single();
-
-      if (participantError) {
-        throw participantError;
-      }
-
-      // Create game registration
       const { error: registrationError } = await supabase
         .from("registrations")
         .insert({
-          participant_id: participant.id,
+          participant_id: participantId,
           game_id: game.id,
           status: "confirmed",
         });
@@ -134,18 +115,12 @@ export default function GameRegistrationClient({
         throw registrationError;
       }
 
-      setSuccess(
-        `You have successfully registered for ${game.name}.`
-      );
-
-      setName("");
-      setPhone("");
-      setRoomNumber("");
+      setSuccess(`You have successfully registered for ${game.name}.`);
     } catch (err) {
       setError(
         err instanceof Error
           ? err.message
-          : "Unable to complete registration."
+          : "Unable to complete registration.",
       );
     } finally {
       setRegistering(false);
@@ -156,19 +131,24 @@ export default function GameRegistrationClient({
     <main className="min-h-screen bg-orange-50">
       <header className="border-b bg-white">
         <div className="mx-auto flex max-w-6xl items-center justify-between px-4 py-4">
-          <Link
-            href="/"
-            className="text-xl font-bold text-orange-600"
-          >
+          <Link href="/" className="text-xl font-bold text-orange-600">
             Ganesh Utsav 2026
           </Link>
 
-          <Link
-            href="/games"
-            className="rounded-xl border border-orange-200 px-4 py-2 font-semibold text-orange-700 hover:bg-orange-50"
-          >
-            Games
-          </Link>
+          <div className="flex gap-3">
+            <Link
+              href="/my-games"
+              className="hidden rounded-xl border border-orange-200 px-4 py-2 font-semibold text-orange-700 hover:bg-orange-50 sm:block"
+            >
+              My Games
+            </Link>
+            <Link
+              href="/games"
+              className="rounded-xl border border-orange-200 px-4 py-2 font-semibold text-orange-700 hover:bg-orange-50"
+            >
+              Games
+            </Link>
+          </div>
         </div>
       </header>
 
@@ -178,12 +158,12 @@ export default function GameRegistrationClient({
             href="/games"
             className="text-sm font-medium text-orange-700 hover:underline"
           >
-            ← Back to Games
+            &larr; Back to Games
           </Link>
 
           <div className="mt-5 rounded-3xl bg-white p-6 shadow-lg md:p-8">
             <p className="text-sm font-semibold uppercase tracking-wider text-orange-600">
-              Participant Registration
+              Game Registration
             </p>
 
             <h1 className="mt-2 text-3xl font-bold text-gray-900">
@@ -209,65 +189,29 @@ export default function GameRegistrationClient({
                   <div className="mt-6 rounded-xl bg-red-50 p-4 text-sm text-red-700">
                     Registration is currently closed.
                   </div>
+                ) : !participantChecked ? (
+                  <div className="mt-6 rounded-xl bg-orange-50 p-4 text-sm text-gray-600">
+                    Checking your participant registration...
+                  </div>
+                ) : !participantId ? (
+                  <div className="mt-6 rounded-xl bg-orange-50 p-5 text-gray-700">
+                    <p className="font-bold">Register before choosing a game</p>
+                    <p className="mt-1 text-sm">
+                      First register as a participant and choose your team. You
+                      do not need to create an account or log in.
+                    </p>
+                    <Link
+                      href={registrationPath}
+                      className="mt-4 inline-block rounded-xl bg-orange-600 px-5 py-3 font-semibold text-white hover:bg-orange-700"
+                    >
+                      Register and choose a team
+                    </Link>
+                  </div>
                 ) : (
-                  <form
-                    onSubmit={handleRegister}
-                    className="mt-8 space-y-5"
-                  >
-                    <div>
-                      <label
-                        htmlFor="name"
-                        className="mb-2 block text-sm font-semibold text-gray-700"
-                      >
-                        Full Name
-                      </label>
-
-                      <input
-                        id="name"
-                        type="text"
-                        value={name}
-                        onChange={(e) => setName(e.target.value)}
-                        placeholder="Enter your name"
-                        required
-                        className="w-full rounded-xl border border-gray-300 px-4 py-3 outline-none focus:border-orange-500 focus:ring-2 focus:ring-orange-200"
-                      />
-                    </div>
-
-                    <div>
-                      <label
-                        htmlFor="phone"
-                        className="mb-2 block text-sm font-semibold text-gray-700"
-                      >
-                        Phone Number
-                      </label>
-
-                      <input
-                        id="phone"
-                        type="tel"
-                        value={phone}
-                        onChange={(e) => setPhone(e.target.value)}
-                        placeholder="Enter phone number"
-                        required
-                        className="w-full rounded-xl border border-gray-300 px-4 py-3 outline-none focus:border-orange-500 focus:ring-2 focus:ring-orange-200"
-                      />
-                    </div>
-
-                    <div>
-                      <label
-                        htmlFor="room"
-                        className="mb-2 block text-sm font-semibold text-gray-700"
-                      >
-                        Room Number
-                      </label>
-
-                      <input
-                        id="room"
-                        type="text"
-                        value={roomNumber}
-                        onChange={(e) => setRoomNumber(e.target.value)}
-                        placeholder="Optional"
-                        className="w-full rounded-xl border border-gray-300 px-4 py-3 outline-none focus:border-orange-500 focus:ring-2 focus:ring-orange-200"
-                      />
+                  <form onSubmit={handleRegister} className="mt-8 space-y-5">
+                    <div className="rounded-xl bg-orange-50 p-4 text-sm text-gray-700">
+                      Your participant registration and team selection will be
+                      used for this game.
                     </div>
 
                     {error && (
@@ -278,19 +222,20 @@ export default function GameRegistrationClient({
 
                     {success && (
                       <div className="rounded-xl bg-green-50 p-4 text-sm text-green-700">
-                        <p className="font-bold">
-                          ✓ Registration successful
-                        </p>
-
-                        <p className="mt-1">
-                          {success}
-                        </p>
+                        <p className="font-bold">Registration successful</p>
+                        <p className="mt-1">{success}</p>
+                        <Link
+                          href="/my-games"
+                          className="mt-3 inline-block font-semibold text-green-800 underline"
+                        >
+                          View my games
+                        </Link>
                       </div>
                     )}
 
                     <button
                       type="submit"
-                      disabled={registering}
+                      disabled={registering || Boolean(success)}
                       className="w-full rounded-xl bg-orange-600 px-5 py-4 font-bold text-white hover:bg-orange-700 disabled:cursor-not-allowed disabled:opacity-50"
                     >
                       {registering

@@ -41,7 +41,7 @@ export default function AdminParticipantsPage() {
       } = await supabase.auth.getUser();
 
       if (!user) {
-        router.replace("/login");
+        router.replace("/auth/login?next=/admin/participants");
         return;
       }
 

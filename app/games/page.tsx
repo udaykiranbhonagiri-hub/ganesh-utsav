@@ -65,6 +65,13 @@ export default function GamesPage() {
             </Link>
 
             <Link
+              href="/register?next=/games"
+              className="hidden rounded-xl border border-orange-200 px-4 py-2 font-semibold text-orange-700 hover:bg-orange-50 md:block"
+            >
+              Register
+            </Link>
+
+            <Link
               href="/chanda"
               className="rounded-xl bg-orange-600 px-5 py-2.5 font-semibold text-white hover:bg-orange-700"
             >
@@ -86,9 +93,16 @@ export default function GamesPage() {
           </h1>
 
           <p className="mt-3 max-w-2xl text-gray-600">
-            Register for the games and activities planned during
-            the Utsav.
+            First register as a participant and choose your team, then join
+            the games and activities planned during the Utsav.
           </p>
+
+          <Link
+            href="/register?next=/games"
+            className="mt-6 inline-block rounded-xl bg-orange-600 px-5 py-3 font-semibold text-white hover:bg-orange-700"
+          >
+            Register and choose a team
+          </Link>
         </div>
       </section>
 

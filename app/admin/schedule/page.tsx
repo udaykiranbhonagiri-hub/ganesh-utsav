@@ -45,7 +45,7 @@ export default function AdminSchedulePage() {
     } = await supabase.auth.getUser();
 
     if (!user) {
-      router.replace("/login");
+      router.replace("/auth/login?next=/admin/schedule");
       return false;
     }
 

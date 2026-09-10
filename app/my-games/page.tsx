@@ -1,8 +1,9 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 
+import { getSavedParticipantId } from "@/lib/participant-session";
 import { createClient } from "@/lib/supabase/client";
 
 type Registration = {
@@ -18,30 +19,23 @@ type Registration = {
 };
 
 export default function MyGamesPage() {
-  const supabase = createClient();
+  const supabase = useMemo(() => createClient(), []);
 
   const [registrations, setRegistrations] = useState<Registration[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const [registrationRequired, setRegistrationRequired] = useState(false);
 
   useEffect(() => {
     async function loadRegistrations() {
       setLoading(true);
       setError("");
+      setRegistrationRequired(false);
 
       try {
-        const {
-          data: { user },
-          error: userError,
-        } = await supabase.auth.getUser();
-
-        if (userError) {
-          throw userError;
-        }
-
-        if (!user) {
-          window.location.href =
-            "/login?next=/my-games";
+        const participantId = getSavedParticipantId();
+        if (!participantId) {
+          setRegistrationRequired(true);
           return;
         }
 
@@ -61,7 +55,7 @@ export default function MyGamesPage() {
               )
             `
             )
-            .eq("user_id", user.id)
+            .eq("participant_id", participantId)
             .order("registered_at", {
               ascending: false,
             });
@@ -108,10 +102,10 @@ export default function MyGamesPage() {
             </Link>
 
             <Link
-              href="/dashboard"
-              className="hidden rounded-xl border border-orange-200 px-4 py-2 font-semibold text-orange-700 hover:bg-orange-50 sm:block"
-            >
-              Dashboard
+            href="/register?next=/my-games"
+            className="hidden rounded-xl border border-orange-200 px-4 py-2 font-semibold text-orange-700 hover:bg-orange-50 sm:block"
+          >
+              Register
             </Link>
           </div>
         </div>
@@ -157,9 +151,31 @@ export default function MyGamesPage() {
             </div>
           )}
 
+          {!loading && !error && registrationRequired && (
+            <div className="mt-8 rounded-2xl bg-white p-10 text-center shadow">
+              <div className="text-4xl">Games</div>
+
+              <h2 className="mt-4 text-xl font-bold text-gray-900">
+                Participant registration required
+              </h2>
+
+              <p className="mt-2 text-gray-500">
+                Register and choose your team before viewing or joining games.
+              </p>
+
+              <Link
+                href="/register?next=/my-games"
+                className="mt-6 inline-block rounded-xl bg-orange-600 px-5 py-3 font-semibold text-white hover:bg-orange-700"
+              >
+                Register and choose a team
+              </Link>
+            </div>
+          )}
+
           {/* Empty */}
           {!loading &&
             !error &&
+            !registrationRequired &&
             registrations.length === 0 && (
               <div className="mt-8 rounded-2xl bg-white p-10 text-center shadow">
                 <div className="text-4xl">🎮</div>
@@ -184,6 +200,7 @@ export default function MyGamesPage() {
           {/* Registrations */}
           {!loading &&
             !error &&
+            !registrationRequired &&
             registrations.length > 0 && (
               <div className="mt-8 grid gap-5 md:grid-cols-2">
                 {registrations.map((registration) => (
@@ -233,6 +250,7 @@ export default function MyGamesPage() {
           {/* Browse Games */}
           {!loading &&
             !error &&
+            !registrationRequired &&
             registrations.length > 0 && (
               <div className="mt-8 text-center">
                 <Link

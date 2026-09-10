@@ -47,15 +47,15 @@ export async function updateSession(request: NextRequest) {
   const { data } = await supabase.auth.getClaims();
   const user = data?.claims;
 
-  if (
-    request.nextUrl.pathname !== "/" &&
-    !user &&
-    !request.nextUrl.pathname.startsWith("/login") &&
-    !request.nextUrl.pathname.startsWith("/auth")
-  ) {
-    // no user, potentially respond by redirecting the user to the login page
+  if (request.nextUrl.pathname.startsWith("/admin") && !user) {
+    // The public website, Chanda, and participant registration are open to
+    // everyone. Only the admin area requires an authenticated session.
     const url = request.nextUrl.clone();
     url.pathname = "/auth/login";
+    url.searchParams.set(
+      "next",
+      `${request.nextUrl.pathname}${request.nextUrl.search}`,
+    );
     return NextResponse.redirect(url);
   }
 
