@@ -1,6 +1,22 @@
-import GameRegistrationClient from "./GameRegistrationClient";
+import { redirect } from "next/navigation";
 
-export const instant = false;
+const games = [
+  "chess",
+  "cricket",
+  "carrom",
+  "freefire",
+  "quiz",
+  "fun",
+  "smashkarts",
+  "uno",
+  "rummy",
+];
+
+export function generateStaticParams() {
+  return games.map((game) => ({
+    game,
+  }));
+}
 
 type Props = {
   params: Promise<{
@@ -13,5 +29,5 @@ export default async function GameRegistrationPage({
 }: Props) {
   const { game } = await params;
 
-  return <GameRegistrationClient gameSlug={game} />;
+  redirect(`/register?game=${game}`);
 }

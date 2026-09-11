@@ -1,245 +1,381 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
-import Navbar from "@/components/Navbar";
 
 type Participant = {
   id: string;
-  full_name: string;
+  name: string;
   phone: string;
-  room_number: string | null;
-  team_id: string | null;
+  room: string;
   created_at: string;
 };
 
-type Team = {
+type Registration = {
   id: string;
-  name: string;
+  participant_id: string;
+  game_id: string;
+  status: string | null;
+  game: {
+    name: string;
+  } | null;
+};
+
+type Payment = {
+  id: string;
+  participant_id: string;
+  amount: number;
+  utr_number: string;
+  payment_method: string | null;
+  created_at: string;
+};
+
+type ParticipantView = Participant & {
+  games: {
+    id: string;
+    name: string;
+    status: string;
+  }[];
+  payment?: Payment;
 };
 
 export default function ParticipantsClient() {
   const supabase = createClient();
 
   const [participants, setParticipants] = useState<Participant[]>([]);
-  const [teams, setTeams] = useState<Team[]>([]);
+  const [registrations, setRegistrations] = useState<Registration[]>([]);
+  const [payments, setPayments] = useState<Payment[]>([]);
   const [loading, setLoading] = useState(true);
-  const [message, setMessage] = useState("");
-
-  async function loadData() {
-    setLoading(true);
-    setMessage("");
-
-    const [
-      { data: participantData, error: participantError },
-      { data: teamData, error: teamError },
-    ] = await Promise.all([
-      supabase
-        .from("participants")
-        .select("id, full_name, phone, room_number, team_id, created_at")
-        .order("created_at", { ascending: false }),
-
-      supabase
-        .from("teams")
-        .select("id, name")
-        .order("name", { ascending: true }),
-    ]);
-
-    if (participantError) {
-      setMessage(participantError.message);
-      setLoading(false);
-      return;
-    }
-
-    if (teamError) {
-      setMessage(teamError.message);
-      setLoading(false);
-      return;
-    }
-
-    setParticipants(participantData ?? []);
-    setTeams(teamData ?? []);
-    setLoading(false);
-  }
+  const [error, setError] = useState("");
 
   useEffect(() => {
     loadData();
   }, []);
 
-  async function updateTeam(participantId: string, teamId: string) {
-    const { error } = await supabase
-      .from("participants")
-      .update({
-        team_id: teamId || null,
-      })
-      .eq("id", participantId);
+  async function loadData() {
+    setLoading(true);
+    setError("");
 
-    if (error) {
-      setMessage(error.message);
+    const [
+      { data: participantData, error: participantError },
+      { data: registrationData, error: registrationError },
+      { data: paymentData, error: paymentError },
+    ] = await Promise.all([
+      supabase
+        .from("participants")
+        .select("id,name,phone,room,created_at")
+        .order("created_at", { ascending: false }),
+
+      supabase
+        .from("registrations")
+        .select(`
+          id,
+          participant_id,
+          game_id,
+          status,
+          game:games (
+            name
+          )
+        `)
+        .order("created_at", { ascending: false }),
+
+      supabase
+        .from("game_pass_payments")
+        .select(`
+          id,
+          participant_id,
+          amount,
+          utr_number,
+          payment_method,
+          created_at
+        `)
+        .order("created_at", { ascending: false }),
+    ]);
+
+    if (participantError) {
+      setError(participantError.message);
+      setLoading(false);
       return;
     }
 
-    setParticipants((current) =>
-      current.map((participant) =>
-        participant.id === participantId
-          ? {
-              ...participant,
-              team_id: teamId || null,
-            }
-          : participant,
-      ),
-    );
+    if (registrationError) {
+      setError(registrationError.message);
+      setLoading(false);
+      return;
+    }
 
-    setMessage("Team updated successfully.");
+    if (paymentError) {
+      setError(paymentError.message);
+      setLoading(false);
+      return;
+    }
+
+    setParticipants(participantData || []);
+    setRegistrations(
+      (registrationData || []) as unknown as Registration[]
+    );
+    setPayments(paymentData || []);
+    setLoading(false);
   }
 
-  function getTeamName(teamId: string | null) {
-    if (!teamId) return "Unassigned";
+  const participantViews = useMemo<ParticipantView[]>(() => {
+    return participants.map((participant) => {
+      const participantRegistrations = registrations.filter(
+        (registration) =>
+          registration.participant_id === participant.id
+      );
 
+      const games = participantRegistrations
+        .filter((registration) => registration.game)
+        .map((registration) => ({
+          id: registration.game_id,
+          name: registration.game!.name,
+          status: registration.status || "pending",
+        }));
+
+      const payment = payments.find(
+        (item) => item.participant_id === participant.id
+      );
+
+      return {
+        ...participant,
+        games,
+        payment,
+      };
+    });
+  }, [participants, registrations, payments]);
+
+  const totalParticipants = participantViews.length;
+
+  const paidParticipants = participantViews.filter(
+    (participant) => participant.payment
+  ).length;
+
+  const unpaidParticipants = participantViews.filter(
+    (participant) => !participant.payment
+  ).length;
+
+  const totalCollected = payments.reduce(
+    (sum, payment) => sum + Number(payment.amount),
+    0
+  );
+
+  const approvedGames = registrations.filter(
+    (registration) => registration.status === "approved"
+  ).length;
+
+  if (loading) {
     return (
-      teams.find((team) => team.id === teamId)?.name ?? "Unknown team"
+      <main className="min-h-screen bg-[#fffaf3] px-4 py-10">
+        <div className="mx-auto max-w-7xl rounded-3xl bg-white p-8 shadow-sm">
+          <p className="font-semibold text-neutral-600">
+            Loading participants...
+          </p>
+        </div>
+      </main>
     );
   }
 
   return (
-    <>
-      <Navbar />
+    <main className="min-h-screen bg-[#fffaf3] px-4 py-10">
+      <div className="mx-auto max-w-7xl">
 
-      <main className="min-h-screen bg-orange-50 px-4 py-8">
-        <div className="mx-auto max-w-7xl">
-          <div className="mb-8">
-            <p className="text-sm font-semibold uppercase tracking-[0.2em] text-orange-600">
+        {/* Header */}
+        <div className="mb-8 flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
+          <div>
+            <p className="text-sm font-bold uppercase tracking-[0.2em] text-orange-600">
               Admin Panel
             </p>
 
-            <div className="mt-2 flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
-              <div>
-                <h1 className="text-3xl font-black tracking-tight text-gray-900 sm:text-4xl">
-                  Participants
-                </h1>
+            <h1 className="mt-2 text-4xl font-black tracking-tight text-neutral-900">
+              Participants
+            </h1>
 
-                <p className="mt-2 text-gray-600">
-                  Manage registered participants and assign teams.
-                </p>
-              </div>
-
-              <div className="rounded-2xl bg-white px-5 py-3 shadow-sm ring-1 ring-orange-100">
-                <p className="text-xs font-semibold uppercase tracking-wider text-gray-500">
-                  Total Participants
-                </p>
-
-                <p className="mt-1 text-2xl font-black text-orange-600">
-                  {participants.length}
-                </p>
-              </div>
-            </div>
+            <p className="mt-2 text-neutral-600">
+              View participants, selected games and Game Pass payments.
+            </p>
           </div>
 
-          {message && (
-            <div className="mb-6 rounded-2xl border border-orange-200 bg-white px-4 py-3 text-sm text-gray-700">
-              {message}
-            </div>
-          )}
-
-          {loading ? (
-            <div className="rounded-3xl bg-white p-10 text-center shadow-sm ring-1 ring-orange-100">
-              <p className="text-gray-600">Loading participants...</p>
-            </div>
-          ) : participants.length === 0 ? (
-            <div className="rounded-3xl bg-white p-10 text-center shadow-sm ring-1 ring-orange-100">
-              <h2 className="text-xl font-bold text-gray-900">
-                No participants yet
-              </h2>
-
-              <p className="mt-2 text-gray-600">
-                Participants will appear here after they register for a game.
-              </p>
-            </div>
-          ) : (
-            <div className="overflow-hidden rounded-3xl bg-white shadow-sm ring-1 ring-orange-100">
-              <div className="overflow-x-auto">
-                <table className="min-w-full">
-                  <thead className="border-b border-orange-100 bg-orange-50">
-                    <tr>
-                      <th className="px-5 py-4 text-left text-xs font-bold uppercase tracking-wider text-gray-500">
-                        Name
-                      </th>
-
-                      <th className="px-5 py-4 text-left text-xs font-bold uppercase tracking-wider text-gray-500">
-                        Phone
-                      </th>
-
-                      <th className="px-5 py-4 text-left text-xs font-bold uppercase tracking-wider text-gray-500">
-                        Room
-                      </th>
-
-                      <th className="px-5 py-4 text-left text-xs font-bold uppercase tracking-wider text-gray-500">
-                        Team
-                      </th>
-
-                      <th className="px-5 py-4 text-left text-xs font-bold uppercase tracking-wider text-gray-500">
-                        Registered
-                      </th>
-                    </tr>
-                  </thead>
-
-                  <tbody className="divide-y divide-gray-100">
-                    {participants.map((participant) => (
-                      <tr
-                        key={participant.id}
-                        className="transition hover:bg-orange-50/50"
-                      >
-                        <td className="px-5 py-4 font-semibold text-gray-900">
-                          {participant.full_name}
-                        </td>
-
-                        <td className="px-5 py-4 text-gray-600">
-                          {participant.phone}
-                        </td>
-
-                        <td className="px-5 py-4 text-gray-600">
-                          {participant.room_number || "—"}
-                        </td>
-
-                        <td className="px-5 py-4">
-                          <select
-                            value={participant.team_id ?? ""}
-                            onChange={(event) =>
-                              updateTeam(
-                                participant.id,
-                                event.target.value,
-                              )
-                            }
-                            className="rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm font-medium text-gray-800 outline-none transition focus:border-orange-400 focus:ring-2 focus:ring-orange-100"
-                          >
-                            <option value="">Unassigned</option>
-
-                            {teams.map((team) => (
-                              <option key={team.id} value={team.id}>
-                                {team.name}
-                              </option>
-                            ))}
-                          </select>
-
-                          <p className="mt-1 text-xs text-gray-400">
-                            {getTeamName(participant.team_id)}
-                          </p>
-                        </td>
-
-                        <td className="px-5 py-4 text-sm text-gray-500">
-                          {new Date(
-                            participant.created_at,
-                          ).toLocaleDateString("en-IN")}
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            </div>
-          )}
+          <button
+            type="button"
+            onClick={loadData}
+            className="rounded-2xl border border-neutral-200 bg-white px-5 py-3 text-sm font-bold text-neutral-800 shadow-sm hover:bg-neutral-50"
+          >
+            Refresh
+          </button>
         </div>
-      </main>
-    </>
+
+        {error && (
+          <div className="mb-6 rounded-2xl border border-red-200 bg-red-50 p-4 text-sm font-medium text-red-700">
+            {error}
+          </div>
+        )}
+
+        {/* Stats */}
+        <div className="mb-8 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+          <div className="rounded-3xl bg-white p-5 shadow-sm">
+            <p className="text-sm font-semibold text-neutral-500">
+              Participants
+            </p>
+            <p className="mt-2 text-3xl font-black text-neutral-900">
+              {totalParticipants}
+            </p>
+          </div>
+
+          <div className="rounded-3xl bg-white p-5 shadow-sm">
+            <p className="text-sm font-semibold text-neutral-500">
+              Paid
+            </p>
+            <p className="mt-2 text-3xl font-black text-green-600">
+              {paidParticipants}
+            </p>
+          </div>
+
+          <div className="rounded-3xl bg-white p-5 shadow-sm">
+            <p className="text-sm font-semibold text-neutral-500">
+              Unpaid
+            </p>
+            <p className="mt-2 text-3xl font-black text-red-600">
+              {unpaidParticipants}
+            </p>
+          </div>
+
+          <div className="rounded-3xl bg-white p-5 shadow-sm">
+            <p className="text-sm font-semibold text-neutral-500">
+              Collection
+            </p>
+            <p className="mt-2 text-3xl font-black text-orange-600">
+              ₹{totalCollected}
+            </p>
+          </div>
+        </div>
+
+        {/* Participants */}
+        {participantViews.length === 0 ? (
+          <div className="rounded-3xl bg-white p-12 text-center shadow-sm">
+            <p className="font-bold text-neutral-800">
+              No participants yet.
+            </p>
+
+            <p className="mt-2 text-sm text-neutral-500">
+              Participants will appear after game registration.
+            </p>
+          </div>
+        ) : (
+          <div className="grid gap-5 lg:grid-cols-2">
+            {participantViews.map((participant) => (
+              <div
+                key={participant.id}
+                className="rounded-3xl bg-white p-6 shadow-lg"
+              >
+                <div className="flex items-start justify-between gap-4">
+                  <div>
+                    <h2 className="text-2xl font-black text-neutral-900">
+                      {participant.name}
+                    </h2>
+
+                    <div className="mt-2 space-y-1 text-sm text-neutral-500">
+                      <p>
+                        Phone:{" "}
+                        <strong className="text-neutral-800">
+                          {participant.phone}
+                        </strong>
+                      </p>
+
+                      <p>
+                        Room:{" "}
+                        <strong className="text-neutral-800">
+                          {participant.room}
+                        </strong>
+                      </p>
+                    </div>
+                  </div>
+
+                  <span
+                    className={`rounded-full px-3 py-1 text-xs font-black ${
+                      participant.payment
+                        ? "bg-green-100 text-green-700"
+                        : "bg-red-100 text-red-700"
+                    }`}
+                  >
+                    {participant.payment ? "PAID" : "UNPAID"}
+                  </span>
+                </div>
+
+                {/* Games */}
+                <div className="mt-6">
+                  <p className="text-xs font-bold uppercase tracking-wider text-neutral-400">
+                    Selected Games
+                  </p>
+
+                  <div className="mt-3 flex flex-wrap gap-2">
+                    {participant.games.length > 0 ? (
+                      participant.games.map((game) => (
+                        <div
+                          key={game.id}
+                          className="rounded-full bg-orange-100 px-3 py-2 text-sm font-bold text-orange-700"
+                        >
+                          {game.name}
+
+                          <span className="ml-2 text-xs opacity-70">
+                            {game.status}
+                          </span>
+                        </div>
+                      ))
+                    ) : (
+                      <span className="text-sm text-neutral-400">
+                        No games selected
+                      </span>
+                    )}
+                  </div>
+                </div>
+
+                {/* Payment */}
+                <div className="mt-6 rounded-2xl bg-neutral-50 p-4">
+                  <p className="text-xs font-bold uppercase tracking-wider text-neutral-400">
+                    Game Pass
+                  </p>
+
+                  {participant.payment ? (
+                    <div className="mt-2">
+                      <p className="text-2xl font-black text-green-600">
+                        ₹{participant.payment.amount}
+                      </p>
+
+                      <p className="mt-2 break-all text-sm text-neutral-600">
+                        UTR:{" "}
+                        <strong className="text-neutral-900">
+                          {participant.payment.utr_number}
+                        </strong>
+                      </p>
+
+                      <p className="mt-1 text-xs uppercase text-neutral-400">
+                        {participant.payment.payment_method || "upi"}
+                      </p>
+                    </div>
+                  ) : (
+                    <p className="mt-2 font-bold text-red-600">
+                      No Game Pass payment recorded
+                    </p>
+                  )}
+                </div>
+
+                {/* Registered */}
+                <p className="mt-4 text-xs text-neutral-400">
+                  Registered{" "}
+                  {new Date(
+                    participant.created_at
+                  ).toLocaleString()}
+                </p>
+              </div>
+            ))}
+          </div>
+        )}
+
+        <div className="mt-6 rounded-2xl border border-orange-200 bg-orange-50 p-4 text-sm text-orange-800">
+          <strong>Approved game registrations:</strong> {approvedGames}
+        </div>
+      </div>
+    </main>
   );
 }

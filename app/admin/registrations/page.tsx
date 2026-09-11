@@ -2,25 +2,27 @@ import { Suspense } from "react";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { isSupaAdmin } from "@/lib/admin";
-import ParticipantsClient from "./ParticipantsClient";
+import RegistrationsClient from "./RegistrationsClient";
 
-export default function AdminParticipantsPage() {
+export default function AdminRegistrationsPage() {
   return (
     <Suspense
       fallback={
         <main className="min-h-screen bg-[#fffaf3] px-4 py-10">
-          <div className="mx-auto max-w-7xl rounded-3xl bg-white p-8">
-            Loading participants...
+          <div className="mx-auto max-w-7xl">
+            <div className="rounded-3xl bg-white p-8 shadow-sm">
+              Loading registrations...
+            </div>
           </div>
         </main>
       }
     >
-      <AdminParticipantsContent />
+      <AdminRegistrationsContent />
     </Suspense>
   );
 }
 
-async function AdminParticipantsContent() {
+async function AdminRegistrationsContent() {
   const supabase = await createClient();
 
   const {
@@ -28,7 +30,7 @@ async function AdminParticipantsContent() {
   } = await supabase.auth.getUser();
 
   if (!user) {
-    redirect("/auth/login?next=/admin/participants");
+    redirect("/auth/login?next=/admin/registrations");
   }
 
   const { data: profile, error } = await supabase
@@ -41,5 +43,5 @@ async function AdminParticipantsContent() {
     redirect("/");
   }
 
-  return <ParticipantsClient />;
+  return <RegistrationsClient />;
 }

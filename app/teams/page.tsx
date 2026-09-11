@@ -1,213 +1,246 @@
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
-
-export const instant = false;
-
-type TeamMember = {
-  team_id: string;
-  team_name: string;
-  short_name: string | null;
-  member_id: string | null;
-  full_name: string | null;
-};
+import Navbar from "@/components/Navbar";
 
 type Team = {
   id: string;
   name: string;
   short_name: string | null;
-  members: string[];
+  description: string | null;
 };
+
+type TeamMember = {
+  team_id: string;
+  full_name: string | null;
+};
+
+const teamStyles: Record<
+  string,
+  {
+    code: string;
+    label: string;
+    light: string;
+    text: string;
+  }
+> = {
+  Ekdant: {
+    code: "EKD",
+    label: "Strength & Spirit",
+    light: "bg-orange-50",
+    text: "text-orange-700",
+  },
+  Modak: {
+    code: "MOD",
+    label: "Energy & Unity",
+    light: "bg-amber-50",
+    text: "text-amber-700",
+  },
+  Morya: {
+    code: "MOR",
+    label: "Fire & Focus",
+    light: "bg-red-50",
+    text: "text-red-700",
+  },
+  Siddhivinayak: {
+    code: "SID",
+    label: "Discipline & Drive",
+    light: "bg-yellow-50",
+    text: "text-yellow-700",
+  },
+};
+
+export const instant = false;
 
 export default async function TeamsPage() {
   const supabase = await createClient();
 
-  const { data, error } = await supabase.rpc(
-    "get_public_team_members"
-  );
+  const [{ data: teams }, { data: members }] = await Promise.all([
+    supabase
+      .from("teams")
+      .select("id, name, short_name, description")
+      .order("name", { ascending: true }),
 
-  if (error) {
-    return (
-      <main className="min-h-screen bg-orange-50">
-        <header className="border-b bg-white">
-          <div className="mx-auto flex max-w-6xl items-center justify-between px-6 py-4">
-            <Link
-              href="/"
-              className="text-xl font-bold text-orange-600"
-            >
-              Ganesh Utsav 2026
-            </Link>
+    supabase
+      .from("get_public_team_members")
+      .select("team_id, full_name"),
+  ]);
 
-            <Link
-              href="/chanda"
-              className="rounded-xl bg-orange-600 px-5 py-2.5 font-semibold text-white hover:bg-orange-700"
-            >
-              Chanda
-            </Link>
-          </div>
-        </header>
-
-        <div className="mx-auto max-w-4xl px-6 py-12">
-          <div className="rounded-2xl bg-red-50 p-5 text-red-700">
-            Unable to load teams.
-          </div>
-        </div>
-      </main>
-    );
-  }
-
-  const rows: TeamMember[] = data ?? [];
-
-  const teamMap = new Map<string, Team>();
-
-  for (const row of rows) {
-    if (!teamMap.has(row.team_id)) {
-      teamMap.set(row.team_id, {
-        id: row.team_id,
-        name: row.team_name,
-        short_name: row.short_name,
-        members: [],
-      });
-    }
-
-    if (row.member_id && row.full_name) {
-      teamMap.get(row.team_id)?.members.push(row.full_name);
-    }
-  }
-
-  const teams = Array.from(teamMap.values());
+  const safeTeams = (teams ?? []) as Team[];
+  const safeMembers = (members ?? []) as TeamMember[];
 
   return (
-    <main className="min-h-screen bg-orange-50">
-      {/* Header */}
-      <header className="border-b bg-white">
-        <div className="mx-auto flex max-w-6xl items-center justify-between px-6 py-4">
-          <Link
-            href="/"
-            className="text-xl font-bold text-orange-600"
-          >
-            Ganesh Utsav 2026
-          </Link>
+    <>
+      <Navbar />
 
-          <div className="flex gap-3">
-            <Link
-              href="/schedule"
-              className="hidden rounded-xl border border-orange-200 px-4 py-2 font-semibold text-orange-700 hover:bg-orange-50 sm:block"
-            >
-              Schedule
-            </Link>
+      <main className="min-h-screen bg-[#fffaf3]">
+        {/* Hero */}
+        <section className="relative overflow-hidden border-b border-orange-100">
+          <div className="absolute inset-0 bg-[linear-gradient(rgba(234,88,12,0.045)_1px,transparent_1px),linear-gradient(90deg,rgba(234,88,12,0.045)_1px,transparent_1px)] bg-[size:32px_32px]" />
 
-            <Link
-              href="/chanda"
-              className="rounded-xl bg-orange-600 px-5 py-2.5 font-semibold text-white hover:bg-orange-700"
-            >
-              Chanda
-            </Link>
-          </div>
-        </div>
-      </header>
-
-      {/* Heading */}
-      <section className="px-6 py-12">
-        <div className="mx-auto max-w-6xl">
-          <p className="text-sm font-semibold uppercase tracking-wider text-orange-600">
-            Ganesh Utsav 2026
-          </p>
-
-          <h1 className="mt-2 text-4xl font-bold text-gray-900">
-            Our Teams
-          </h1>
-
-          <p className="mt-3 max-w-2xl text-gray-600">
-            Four teams competing together throughout the Ganesh Utsav.
-          </p>
-        </div>
-      </section>
-
-      {/* Teams */}
-      <section className="px-6 pb-16">
-        <div className="mx-auto grid max-w-6xl gap-6 md:grid-cols-2">
-          {teams.map((team) => (
-            <article
-              key={team.id}
-              className="rounded-2xl bg-white p-6 shadow"
-            >
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-sm font-semibold uppercase tracking-wider text-orange-600">
-                    {team.short_name}
-                  </p>
-
-                  <h2 className="mt-1 text-2xl font-bold text-gray-900">
-                    {team.name}
-                  </h2>
-                </div>
-
-                <div className="flex h-12 w-12 items-center justify-center rounded-full bg-orange-100 font-bold text-orange-700">
-                  {team.members.length}
-                </div>
+          <div className="relative mx-auto max-w-7xl px-5 py-16 sm:px-8 sm:py-20 lg:px-10 lg:py-24">
+            <div className="max-w-4xl">
+              <div className="inline-flex items-center gap-2 rounded-full border border-orange-200 bg-white px-3.5 py-2 text-xs font-bold uppercase tracking-[0.18em] text-orange-700 shadow-sm">
+                <span className="h-2 w-2 rounded-full bg-orange-500" />
+                Ganesh Utsav 2026
               </div>
 
-              <div className="mt-5 border-t pt-5">
-                <p className="mb-3 text-sm font-semibold text-gray-500">
-                  Team Members
+              <h1 className="mt-6 text-5xl font-black tracking-[-0.04em] text-gray-950 sm:text-6xl lg:text-7xl">
+                One festival.
+                <br />
+                <span className="text-orange-600">Four teams.</span>
+              </h1>
+
+              <p className="mt-6 max-w-2xl text-base leading-7 text-gray-600 sm:text-lg">
+                Four hostel teams. One celebration. Every game, challenge and
+                moment adds to the team spirit.
+              </p>
+            </div>
+
+            <div className="mt-10 flex flex-wrap gap-3">
+              <Link
+                href="/games"
+                className="rounded-2xl bg-orange-600 px-5 py-3 text-sm font-bold text-white shadow-lg shadow-orange-200 transition hover:-translate-y-0.5 hover:bg-orange-700"
+              >
+                Explore Games
+              </Link>
+
+              <Link
+                href="/schedule"
+                className="rounded-2xl border border-gray-200 bg-white px-5 py-3 text-sm font-bold text-gray-800 shadow-sm transition hover:-translate-y-0.5 hover:border-orange-200 hover:text-orange-700"
+              >
+                View Schedule
+              </Link>
+            </div>
+          </div>
+        </section>
+
+        {/* Teams */}
+        <section className="mx-auto max-w-7xl px-5 py-14 sm:px-8 sm:py-20 lg:px-10">
+          <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
+            <div>
+              <p className="text-xs font-black uppercase tracking-[0.2em] text-orange-600">
+                The competition
+              </p>
+
+              <h2 className="mt-2 text-3xl font-black tracking-tight text-gray-950 sm:text-4xl">
+                Meet the teams
+              </h2>
+            </div>
+
+            <p className="max-w-md text-sm leading-6 text-gray-500">
+              Represent your team across games, challenges and festival
+              activities.
+            </p>
+          </div>
+
+          <div className="mt-10 grid gap-5 md:grid-cols-2">
+            {safeTeams.map((team, index) => {
+              const style =
+                teamStyles[team.name] ?? {
+                  code: team.short_name ?? `T0${index + 1}`,
+                  label: "Team Spirit",
+                  light: "bg-orange-50",
+                  text: "text-orange-700",
+                };
+
+              const teamMembers = safeMembers.filter(
+                (member) => member.team_id === team.id,
+              );
+
+              return (
+                <article
+                  key={team.id}
+                  className="group overflow-hidden rounded-[28px] border border-gray-200 bg-white shadow-sm transition duration-300 hover:-translate-y-1 hover:shadow-xl"
+                >
+                  <div className="flex min-h-[270px] flex-col justify-between p-6 sm:p-7">
+                    <div>
+                      <div className="flex items-start justify-between gap-5">
+                        <div
+                          className={`flex h-14 w-14 items-center justify-center rounded-2xl text-sm font-black ${style.light} ${style.text}`}
+                        >
+                          {style.code}
+                        </div>
+
+                        <span className="text-xs font-black tracking-[0.18em] text-gray-300">
+                          0{index + 1}
+                        </span>
+                      </div>
+
+                      <p
+                        className={`mt-7 text-xs font-bold uppercase tracking-[0.16em] ${style.text}`}
+                      >
+                        {style.label}
+                      </p>
+
+                      <h3 className="mt-2 text-3xl font-black tracking-tight text-gray-950">
+                        {team.name}
+                      </h3>
+
+                      <p className="mt-3 max-w-lg text-sm leading-6 text-gray-600">
+                        {team.description ||
+                          `Represent ${team.name} across the Ganesh Utsav competitions.`}
+                      </p>
+                    </div>
+
+                    <div className="mt-7 border-t border-gray-100 pt-4">
+                      <div className="flex items-center justify-between">
+                        <div>
+                          <p className="text-xs font-bold uppercase tracking-[0.16em] text-gray-400">
+                            Team Members
+                          </p>
+
+                          <p className="mt-1 text-sm text-gray-500">
+                            {teamMembers.length > 0
+                              ? "Members are being assigned."
+                              : "Members will be assigned soon."}
+                          </p>
+                        </div>
+
+                        <span
+                          className={`flex h-10 w-10 items-center justify-center rounded-full ${style.light} text-lg ${style.text} transition group-hover:translate-x-1`}
+                        >
+                          →
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+                </article>
+              );
+            })}
+          </div>
+        </section>
+
+        {/* Festival CTA */}
+        <section className="mx-auto max-w-7xl px-5 pb-16 sm:px-8 lg:px-10">
+          <div className="overflow-hidden rounded-[32px] bg-gray-950 px-6 py-10 text-white sm:px-10 sm:py-12">
+            <div className="flex flex-col gap-8 lg:flex-row lg:items-center lg:justify-between">
+              <div className="max-w-2xl">
+                <p className="text-xs font-black uppercase tracking-[0.2em] text-orange-400">
+                  Team spirit
                 </p>
 
-                {team.members.length === 0 ? (
-                  <p className="text-sm text-gray-400">
-                    Members will be assigned soon.
-                  </p>
-                ) : (
-                  <div className="grid gap-2 sm:grid-cols-2">
-                    {team.members.map((member, index) => (
-                      <div
-                        key={`${team.id}-${member}-${index}`}
-                        className="rounded-lg bg-orange-50 px-4 py-3 text-sm font-medium text-gray-800"
-                      >
-                        {member}
-                      </div>
-                    ))}
-                  </div>
-                )}
+                <h2 className="mt-3 text-3xl font-black tracking-tight sm:text-4xl">
+                  Your team is ready.
+                  <br />
+                  Are you?
+                </h2>
+
+                <p className="mt-4 text-sm leading-6 text-gray-400 sm:text-base">
+                  Choose your game and represent your team in the festival.
+                </p>
               </div>
-            </article>
-          ))}
-        </div>
-      </section>
 
-      {/* CTA */}
-      <section className="px-6 pb-16">
-        <div className="mx-auto max-w-6xl rounded-2xl bg-orange-600 p-8 text-center text-white">
-          <h2 className="text-2xl font-bold">
-            Ready for the Utsav?
-          </h2>
-
-          <p className="mt-2 text-orange-100">
-            Check the schedule and support the celebration.
-          </p>
-
-          <div className="mt-6 flex flex-col justify-center gap-3 sm:flex-row">
-            <Link
-              href="/schedule"
-              className="rounded-xl bg-white px-6 py-3 font-bold text-orange-700 hover:bg-orange-50"
-            >
-              View Schedule
-            </Link>
-
-            <Link
-              href="/chanda"
-              className="rounded-xl border border-white px-6 py-3 font-bold text-white hover:bg-orange-500"
-            >
-              Contribute Chanda
-            </Link>
+              <Link
+                href="/games"
+                className="inline-flex shrink-0 items-center justify-center rounded-2xl bg-orange-600 px-6 py-3.5 text-sm font-bold text-white transition hover:bg-orange-500"
+              >
+                Join a Game
+                <span className="ml-2">→</span>
+              </Link>
+            </div>
           </div>
-        </div>
-      </section>
-
-      <footer className="border-t bg-white px-6 py-6">
-        <div className="mx-auto max-w-6xl text-center text-sm text-gray-500">
-          Ganesh Utsav 2026
-        </div>
-      </footer>
-    </main>
+        </section>
+      </main>
+    </>
   );
 }
