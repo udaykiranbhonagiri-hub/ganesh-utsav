@@ -1,561 +1,430 @@
 "use client";
 
-import { FormEvent, useEffect, useState } from "react";
-import Link from "next/link";
-import { useRouter } from "next/navigation";
-
+import { useEffect, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
-import { isSupaAdmin } from "@/lib/admin";
+import Navbar from "@/components/Navbar";
 
 type ScheduleItem = {
   id: string;
   title: string;
   description: string | null;
-  day_number: number;
-  event_date: string | null;
+  event_date: string;
   start_time: string | null;
   end_time: string | null;
   location: string | null;
   is_published: boolean;
 };
 
+const emptyForm = {
+  title: "",
+  description: "",
+  event_date: "",
+  start_time: "",
+  end_time: "",
+  location: "",
+  is_published: true,
+};
+
 export default function ScheduleClient() {
-  const router = useRouter();
   const supabase = createClient();
 
   const [items, setItems] = useState<ScheduleItem[]>([]);
+  const [form, setForm] = useState(emptyForm);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
-
-  const [title, setTitle] = useState("");
-  const [description, setDescription] = useState("");
-  const [dayNumber, setDayNumber] = useState("1");
-  const [eventDate, setEventDate] = useState("");
-  const [startTime, setStartTime] = useState("");
-  const [endTime, setEndTime] = useState("");
-  const [location, setLocation] = useState("");
-  const [published, setPublished] = useState(true);
-
-  const [editingId, setEditingId] = useState<string | null>(null);
-  const [error, setError] = useState("");
-  const [success, setSuccess] = useState("");
-
-  async function verifyAdmin() {
-    const {
-      data: { user },
-    } = await supabase.auth.getUser();
-
-    if (!user) {
-      router.replace("/auth/login?next=/admin/schedule");
-      return false;
-    }
-
-    const { data: profile } = await supabase
-      .from("profiles")
-      .select("role")
-      .eq("id", user.id)
-      .single();
-
-    if (!isSupaAdmin(profile?.role)) {
-      router.replace("/");
-      return false;
-    }
-
-    return true;
-  }
+  const [message, setMessage] = useState("");
 
   async function loadSchedule() {
-    const { data, error: loadError } = await supabase
+    setLoading(true);
+
+    const { data, error } = await supabase
       .from("event_schedule")
       .select(
-        "id, title, description, day_number, event_date, start_time, end_time, location, is_published"
+        "id, title, description, event_date, start_time, end_time, location, is_published",
       )
-      .order("day_number", { ascending: true })
       .order("event_date", { ascending: true })
       .order("start_time", { ascending: true });
 
-    if (loadError) {
-      setError(loadError.message);
+    if (error) {
+      setMessage(error.message);
+      setLoading(false);
       return;
     }
 
     setItems(data ?? []);
+    setLoading(false);
   }
 
   useEffect(() => {
-    async function initialize() {
-      const allowed = await verifyAdmin();
-
-      if (allowed) {
-        await loadSchedule();
-      }
-
-      setLoading(false);
-    }
-
-    initialize();
+    loadSchedule();
   }, []);
 
-  function clearForm() {
-    setEditingId(null);
-    setTitle("");
-    setDescription("");
-    setDayNumber("1");
-    setEventDate("");
-    setStartTime("");
-    setEndTime("");
-    setLocation("");
-    setPublished(true);
-  }
-
-  function startEdit(item: ScheduleItem) {
-    setEditingId(item.id);
-    setTitle(item.title);
-    setDescription(item.description ?? "");
-    setDayNumber(String(item.day_number));
-    setEventDate(item.event_date ?? "");
-    setStartTime(item.start_time?.slice(0, 5) ?? "");
-    setEndTime(item.end_time?.slice(0, 5) ?? "");
-    setLocation(item.location ?? "");
-    setPublished(item.is_published);
-
-    window.scrollTo({
-      top: 0,
-      behavior: "smooth",
-    });
-  }
-
-  async function handleSubmit(
-    event: FormEvent<HTMLFormElement>
+  function updateField(
+    field: keyof typeof emptyForm,
+    value: string | boolean,
   ) {
+    setForm((current) => ({
+      ...current,
+      [field]: value,
+    }));
+  }
+
+  async function addSchedule(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
 
+    if (!form.title.trim() || !form.event_date) {
+      setMessage("Title and event date are required.");
+      return;
+    }
+
     setSaving(true);
-    setError("");
-    setSuccess("");
+    setMessage("");
 
-    try {
-      if (!title.trim()) {
-        throw new Error("Enter an activity title.");
-      }
+    const { error } = await supabase.from("event_schedule").insert({
+      title: form.title.trim(),
+      description: form.description.trim() || null,
+      event_date: form.event_date,
+      start_time: form.start_time || null,
+      end_time: form.end_time || null,
+      location: form.location.trim() || null,
+      is_published: form.is_published,
+    });
 
-      if (Number(dayNumber) < 1) {
-        throw new Error("Day number must be at least 1.");
-      }
-
-      const payload = {
-        title: title.trim(),
-        description: description.trim() || null,
-        day_number: Number(dayNumber),
-        event_date: eventDate || null,
-        start_time: startTime || null,
-        end_time: endTime || null,
-        location: location.trim() || null,
-        is_published: published,
-      };
-
-      if (editingId) {
-        const { error: updateError } = await supabase
-          .from("event_schedule")
-          .update(payload)
-          .eq("id", editingId);
-
-        if (updateError) {
-          throw updateError;
-        }
-
-        setSuccess("Schedule item updated.");
-      } else {
-        const { error: insertError } = await supabase
-          .from("event_schedule")
-          .insert(payload);
-
-        if (insertError) {
-          throw insertError;
-        }
-
-        setSuccess("Schedule item added.");
-      }
-
-      clearForm();
-      await loadSchedule();
-    } catch (err) {
-      setError(
-        err instanceof Error
-          ? err.message
-          : "Unable to save schedule."
-      );
-    } finally {
+    if (error) {
+      setMessage(error.message);
       setSaving(false);
-    }
-  }
-
-  async function deleteItem(id: string) {
-    const confirmed = window.confirm(
-      "Are you sure you want to delete this schedule item?"
-    );
-
-    if (!confirmed) {
       return;
     }
 
-    setError("");
-    setSuccess("");
+    setForm(emptyForm);
+    setMessage("Schedule item added successfully.");
+    setSaving(false);
 
-    const { error: deleteError } = await supabase
-      .from("event_schedule")
-      .delete()
-      .eq("id", id);
-
-    if (deleteError) {
-      setError(deleteError.message);
-      return;
-    }
-
-    setSuccess("Schedule item deleted.");
     await loadSchedule();
   }
 
   async function togglePublished(item: ScheduleItem) {
-    setError("");
-    setSuccess("");
-
-    const { error: updateError } = await supabase
+    const { error } = await supabase
       .from("event_schedule")
       .update({
         is_published: !item.is_published,
       })
       .eq("id", item.id);
 
-    if (updateError) {
-      setError(updateError.message);
+    if (error) {
+      setMessage(error.message);
       return;
     }
 
-    await loadSchedule();
-  }
-
-  if (loading) {
-    return (
-      <main className="flex min-h-screen items-center justify-center bg-orange-50">
-        <p className="text-gray-600">Loading...</p>
-      </main>
+    setItems((current) =>
+      current.map((entry) =>
+        entry.id === item.id
+          ? {
+              ...entry,
+              is_published: !entry.is_published,
+            }
+          : entry,
+      ),
     );
   }
 
+  async function deleteItem(id: string) {
+    const confirmed = window.confirm(
+      "Delete this schedule item permanently?",
+    );
+
+    if (!confirmed) return;
+
+    const { error } = await supabase
+      .from("event_schedule")
+      .delete()
+      .eq("id", id);
+
+    if (error) {
+      setMessage(error.message);
+      return;
+    }
+
+    setItems((current) => current.filter((item) => item.id !== id));
+    setMessage("Schedule item deleted.");
+  }
+
+  function formatDate(date: string) {
+    return new Date(`${date}T00:00:00`).toLocaleDateString("en-IN", {
+      day: "numeric",
+      month: "short",
+      year: "numeric",
+    });
+  }
+
+  function formatTime(time: string | null) {
+    if (!time) return "";
+
+    const [hours, minutes] = time.split(":").map(Number);
+
+    const date = new Date();
+    date.setHours(hours, minutes, 0, 0);
+
+    return date.toLocaleTimeString("en-IN", {
+      hour: "numeric",
+      minute: "2-digit",
+    });
+  }
+
   return (
-    <main className="min-h-screen bg-orange-50">
-      {/* Header */}
-      <header className="border-b bg-white">
-        <div className="mx-auto flex max-w-7xl items-center justify-between px-4 py-4 md:px-6">
-          <div>
-            <p className="text-sm font-semibold uppercase tracking-wider text-orange-600">
-              Ganesh Utsav 2026
+    <>
+      <Navbar />
+
+      <main className="min-h-screen bg-orange-50 px-4 py-8">
+        <div className="mx-auto max-w-7xl">
+          <div className="mb-8">
+            <p className="text-sm font-semibold uppercase tracking-[0.2em] text-orange-600">
+              Admin Panel
             </p>
 
-            <h1 className="text-xl font-bold text-gray-900">
-              Schedule Management
+            <h1 className="mt-2 text-3xl font-black tracking-tight text-gray-900 sm:text-4xl">
+              Festival Schedule
             </h1>
+
+            <p className="mt-2 text-gray-600">
+              Create, publish, and manage festival events.
+            </p>
           </div>
 
-          <Link
-            href="/admin"
-            className="rounded-xl border border-orange-200 px-4 py-2 font-semibold text-orange-700 hover:bg-orange-50"
-          >
-            Dashboard
-          </Link>
-        </div>
-      </header>
+          {message && (
+            <div className="mb-6 rounded-2xl border border-orange-200 bg-white px-4 py-3 text-sm text-gray-700">
+              {message}
+            </div>
+          )}
 
-      <section className="px-4 py-8 md:px-6">
-        <div className="mx-auto max-w-6xl">
-          <Link
-            href="/admin"
-            className="text-sm font-medium text-orange-700 hover:underline"
-          >
-            ← Admin Dashboard
-          </Link>
+          <div className="grid gap-8 lg:grid-cols-[380px_1fr]">
+            <section className="rounded-3xl bg-white p-6 shadow-sm ring-1 ring-orange-100">
+              <h2 className="text-xl font-black text-gray-900">
+                Add Event
+              </h2>
 
-          {/* Form */}
-          <div className="mt-5 rounded-3xl bg-white p-6 shadow-lg md:p-8">
-            <h2 className="text-2xl font-bold text-gray-900">
-              {editingId ? "Edit Activity" : "Add Activity"}
-            </h2>
+              <form onSubmit={addSchedule} className="mt-6 space-y-4">
+                <div>
+                  <label className="mb-2 block text-sm font-semibold text-gray-700">
+                    Title
+                  </label>
 
-            <form
-              onSubmit={handleSubmit}
-              className="mt-6 grid gap-5 md:grid-cols-2"
-            >
-              <div className="md:col-span-2">
-                <label className="mb-2 block text-sm font-semibold">
-                  Activity Title
-                </label>
-
-                <input
-                  type="text"
-                  value={title}
-                  onChange={(e) => setTitle(e.target.value)}
-                  placeholder="Ganesh Sthapana"
-                  required
-                  className="w-full rounded-xl border border-gray-300 px-4 py-3 outline-none focus:border-orange-500 focus:ring-2 focus:ring-orange-200"
-                />
-              </div>
-
-              <div className="md:col-span-2">
-                <label className="mb-2 block text-sm font-semibold">
-                  Description
-                </label>
-
-                <textarea
-                  value={description}
-                  onChange={(e) =>
-                    setDescription(e.target.value)
-                  }
-                  placeholder="Activity details..."
-                  rows={4}
-                  className="w-full rounded-xl border border-gray-300 px-4 py-3 outline-none focus:border-orange-500 focus:ring-2 focus:ring-orange-200"
-                />
-              </div>
-
-              <div>
-                <label className="mb-2 block text-sm font-semibold">
-                  Day
-                </label>
-
-                <input
-                  type="number"
-                  min="1"
-                  value={dayNumber}
-                  onChange={(e) =>
-                    setDayNumber(e.target.value)
-                  }
-                  required
-                  className="w-full rounded-xl border border-gray-300 px-4 py-3 outline-none focus:border-orange-500 focus:ring-2 focus:ring-orange-200"
-                />
-              </div>
-
-              <div>
-                <label className="mb-2 block text-sm font-semibold">
-                  Date
-                </label>
-
-                <input
-                  type="date"
-                  value={eventDate}
-                  onChange={(e) =>
-                    setEventDate(e.target.value)
-                  }
-                  className="w-full rounded-xl border border-gray-300 px-4 py-3 outline-none focus:border-orange-500 focus:ring-2 focus:ring-orange-200"
-                />
-              </div>
-
-              <div>
-                <label className="mb-2 block text-sm font-semibold">
-                  Start Time
-                </label>
-
-                <input
-                  type="time"
-                  value={startTime}
-                  onChange={(e) =>
-                    setStartTime(e.target.value)
-                  }
-                  className="w-full rounded-xl border border-gray-300 px-4 py-3 outline-none focus:border-orange-500 focus:ring-2 focus:ring-orange-200"
-                />
-              </div>
-
-              <div>
-                <label className="mb-2 block text-sm font-semibold">
-                  End Time
-                </label>
-
-                <input
-                  type="time"
-                  value={endTime}
-                  onChange={(e) =>
-                    setEndTime(e.target.value)
-                  }
-                  className="w-full rounded-xl border border-gray-300 px-4 py-3 outline-none focus:border-orange-500 focus:ring-2 focus:ring-orange-200"
-                />
-              </div>
-
-              <div className="md:col-span-2">
-                <label className="mb-2 block text-sm font-semibold">
-                  Location
-                </label>
-
-                <input
-                  type="text"
-                  value={location}
-                  onChange={(e) =>
-                    setLocation(e.target.value)
-                  }
-                  placeholder="Hostel Common Area"
-                  className="w-full rounded-xl border border-gray-300 px-4 py-3 outline-none focus:border-orange-500 focus:ring-2 focus:ring-orange-200"
-                />
-              </div>
-
-              <label className="flex items-center gap-3 md:col-span-2">
-                <input
-                  type="checkbox"
-                  checked={published}
-                  onChange={(e) =>
-                    setPublished(e.target.checked)
-                  }
-                  className="h-5 w-5 accent-orange-600"
-                />
-
-                <span className="text-sm font-medium">
-                  Published
-                </span>
-              </label>
-
-              {error && (
-                <div className="rounded-xl bg-red-50 px-4 py-3 text-sm text-red-700 md:col-span-2">
-                  {error}
+                  <input
+                    type="text"
+                    value={form.title}
+                    onChange={(event) =>
+                      updateField("title", event.target.value)
+                    }
+                    placeholder="Ganesh Aarti"
+                    className="w-full rounded-2xl border border-gray-200 px-4 py-3 outline-none focus:border-orange-400 focus:ring-2 focus:ring-orange-100"
+                  />
                 </div>
-              )}
 
-              {success && (
-                <div className="rounded-xl bg-green-50 px-4 py-3 text-sm text-green-700 md:col-span-2">
-                  {success}
+                <div>
+                  <label className="mb-2 block text-sm font-semibold text-gray-700">
+                    Description
+                  </label>
+
+                  <textarea
+                    value={form.description}
+                    onChange={(event) =>
+                      updateField("description", event.target.value)
+                    }
+                    placeholder="Event details"
+                    rows={3}
+                    className="w-full resize-none rounded-2xl border border-gray-200 px-4 py-3 outline-none focus:border-orange-400 focus:ring-2 focus:ring-orange-100"
+                  />
                 </div>
-              )}
 
-              <div className="flex gap-3 md:col-span-2">
+                <div>
+                  <label className="mb-2 block text-sm font-semibold text-gray-700">
+                    Date
+                  </label>
+
+                  <input
+                    type="date"
+                    value={form.event_date}
+                    onChange={(event) =>
+                      updateField("event_date", event.target.value)
+                    }
+                    className="w-full rounded-2xl border border-gray-200 px-4 py-3 outline-none focus:border-orange-400 focus:ring-2 focus:ring-orange-100"
+                  />
+                </div>
+
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="mb-2 block text-sm font-semibold text-gray-700">
+                      Start
+                    </label>
+
+                    <input
+                      type="time"
+                      value={form.start_time}
+                      onChange={(event) =>
+                        updateField("start_time", event.target.value)
+                      }
+                      className="w-full rounded-2xl border border-gray-200 px-3 py-3 outline-none focus:border-orange-400 focus:ring-2 focus:ring-orange-100"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="mb-2 block text-sm font-semibold text-gray-700">
+                      End
+                    </label>
+
+                    <input
+                      type="time"
+                      value={form.end_time}
+                      onChange={(event) =>
+                        updateField("end_time", event.target.value)
+                      }
+                      className="w-full rounded-2xl border border-gray-200 px-3 py-3 outline-none focus:border-orange-400 focus:ring-2 focus:ring-orange-100"
+                    />
+                  </div>
+                </div>
+
+                <div>
+                  <label className="mb-2 block text-sm font-semibold text-gray-700">
+                    Location
+                  </label>
+
+                  <input
+                    type="text"
+                    value={form.location}
+                    onChange={(event) =>
+                      updateField("location", event.target.value)
+                    }
+                    placeholder="Hostel Ground"
+                    className="w-full rounded-2xl border border-gray-200 px-4 py-3 outline-none focus:border-orange-400 focus:ring-2 focus:ring-orange-100"
+                  />
+                </div>
+
+                <label className="flex items-center gap-3 rounded-2xl bg-orange-50 px-4 py-3">
+                  <input
+                    type="checkbox"
+                    checked={form.is_published}
+                    onChange={(event) =>
+                      updateField("is_published", event.target.checked)
+                    }
+                    className="h-4 w-4"
+                  />
+
+                  <span className="text-sm font-semibold text-gray-700">
+                    Publish immediately
+                  </span>
+                </label>
+
                 <button
                   type="submit"
                   disabled={saving}
-                  className="rounded-xl bg-orange-600 px-6 py-3 font-bold text-white hover:bg-orange-700 disabled:opacity-50"
+                  className="w-full rounded-2xl bg-orange-600 px-5 py-3.5 font-bold text-white transition hover:bg-orange-700 disabled:cursor-not-allowed disabled:opacity-60"
                 >
-                  {saving
-                    ? "Saving..."
-                    : editingId
-                    ? "Update Activity"
-                    : "Add Activity"}
+                  {saving ? "Adding..." : "Add Schedule Item"}
                 </button>
+              </form>
+            </section>
 
-                {editingId && (
-                  <button
-                    type="button"
-                    onClick={clearForm}
-                    className="rounded-xl border border-gray-300 px-6 py-3 font-semibold text-gray-700 hover:bg-gray-50"
-                  >
-                    Cancel
-                  </button>
-                )}
+            <section>
+              <div className="mb-4 flex items-center justify-between">
+                <h2 className="text-xl font-black text-gray-900">
+                  Existing Events
+                </h2>
+
+                <span className="rounded-full bg-white px-3 py-1.5 text-sm font-bold text-gray-600 ring-1 ring-orange-100">
+                  {items.length} events
+                </span>
               </div>
-            </form>
-          </div>
 
-          {/* Existing items */}
-          <div className="mt-8 overflow-hidden rounded-2xl bg-white shadow">
-            <div className="border-b px-6 py-5">
-              <h2 className="text-xl font-bold text-gray-900">
-                Existing Activities
-              </h2>
-            </div>
+              {loading ? (
+                <div className="rounded-3xl bg-white p-10 text-center shadow-sm ring-1 ring-orange-100">
+                  <p className="text-gray-600">Loading schedule...</p>
+                </div>
+              ) : items.length === 0 ? (
+                <div className="rounded-3xl bg-white p-10 text-center shadow-sm ring-1 ring-orange-100">
+                  <h3 className="text-lg font-bold text-gray-900">
+                    No schedule items
+                  </h3>
 
-            {items.length === 0 ? (
-              <div className="p-8 text-center text-gray-500">
-                No schedule items yet.
-              </div>
-            ) : (
-              <div className="divide-y">
-                {items.map((item) => (
-                  <div
-                    key={item.id}
-                    className="p-5 md:p-6"
-                  >
-                    <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
-                      <div>
-                        <div className="flex flex-wrap gap-2">
-                          <span className="rounded-full bg-orange-100 px-3 py-1 text-xs font-bold text-orange-700">
-                            Day {item.day_number}
-                          </span>
+                  <p className="mt-2 text-gray-600">
+                    Add your first festival event using the form.
+                  </p>
+                </div>
+              ) : (
+                <div className="space-y-4">
+                  {items.map((item) => (
+                    <article
+                      key={item.id}
+                      className="rounded-3xl bg-white p-5 shadow-sm ring-1 ring-orange-100"
+                    >
+                      <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+                        <div>
+                          <div className="flex flex-wrap items-center gap-2">
+                            <h3 className="text-lg font-black text-gray-900">
+                              {item.title}
+                            </h3>
 
-                          <span
-                            className={`rounded-full px-3 py-1 text-xs font-bold ${
-                              item.is_published
-                                ? "bg-green-100 text-green-700"
-                                : "bg-gray-100 text-gray-600"
-                            }`}
-                          >
-                            {item.is_published
-                              ? "Published"
-                              : "Hidden"}
-                          </span>
-                        </div>
-
-                        <h3 className="mt-3 text-xl font-bold">
-                          {item.title}
-                        </h3>
-
-                        {item.description && (
-                          <p className="mt-1 text-gray-600">
-                            {item.description}
-                          </p>
-                        )}
-
-                        <div className="mt-3 flex flex-wrap gap-4 text-sm text-gray-500">
-                          {item.event_date && (
-                            <span>📅 {item.event_date}</span>
-                          )}
-
-                          {item.start_time && (
-                            <span>
-                              🕐 {item.start_time.slice(0, 5)}
-                              {item.end_time
-                                ? ` – ${item.end_time.slice(0, 5)}`
-                                : ""}
+                            <span
+                              className={`rounded-full px-2.5 py-1 text-xs font-bold ${
+                                item.is_published
+                                  ? "bg-green-100 text-green-700"
+                                  : "bg-gray-100 text-gray-600"
+                              }`}
+                            >
+                              {item.is_published
+                                ? "Published"
+                                : "Draft"}
                             </span>
-                          )}
+                          </div>
+
+                          <p className="mt-2 text-sm font-semibold text-orange-600">
+                            {formatDate(item.event_date)}
+                            {item.start_time
+                              ? ` • ${formatTime(item.start_time)}`
+                              : ""}
+                            {item.end_time
+                              ? ` - ${formatTime(item.end_time)}`
+                              : ""}
+                          </p>
 
                           {item.location && (
-                            <span>📍 {item.location}</span>
+                            <p className="mt-1 text-sm text-gray-500">
+                              {item.location}
+                            </p>
+                          )}
+
+                          {item.description && (
+                            <p className="mt-3 text-sm leading-6 text-gray-600">
+                              {item.description}
+                            </p>
                           )}
                         </div>
+
+                        <div className="flex shrink-0 gap-2">
+                          <button
+                            type="button"
+                            onClick={() => togglePublished(item)}
+                            className="rounded-xl border border-gray-200 px-3 py-2 text-sm font-bold text-gray-700 transition hover:bg-gray-50"
+                          >
+                            {item.is_published ? "Unpublish" : "Publish"}
+                          </button>
+
+                          <button
+                            type="button"
+                            onClick={() => deleteItem(item.id)}
+                            className="rounded-xl bg-red-50 px-3 py-2 text-sm font-bold text-red-600 transition hover:bg-red-100"
+                          >
+                            Delete
+                          </button>
+                        </div>
                       </div>
-
-                      <div className="flex flex-wrap gap-2">
-                        <button
-                          type="button"
-                          onClick={() => startEdit(item)}
-                          className="rounded-lg border border-orange-300 px-4 py-2 text-sm font-semibold text-orange-700 hover:bg-orange-50"
-                        >
-                          Edit
-                        </button>
-
-                        <button
-                          type="button"
-                          onClick={() =>
-                            togglePublished(item)
-                          }
-                          className="rounded-lg border border-gray-300 px-4 py-2 text-sm font-semibold text-gray-700 hover:bg-gray-50"
-                        >
-                          {item.is_published
-                            ? "Hide"
-                            : "Publish"}
-                        </button>
-
-                        <button
-                          type="button"
-                          onClick={() =>
-                            deleteItem(item.id)
-                          }
-                          className="rounded-lg bg-red-600 px-4 py-2 text-sm font-semibold text-white hover:bg-red-700"
-                        >
-                          Delete
-                        </button>
-                      </div>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            )}
+                    </article>
+                  ))}
+                </div>
+              )}
+            </section>
           </div>
         </div>
-      </section>
-    </main>
+      </main>
+    </>
   );
 }

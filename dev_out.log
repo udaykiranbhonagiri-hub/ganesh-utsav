@@ -6,9 +6,17 @@
 - Local:         http://localhost:3000
 - Network:       http://192.168.137.1:3000
 - Environments: .env.local
-✓ Ready in 1388ms
-✓ Running next.config.ts took 199ms
+✓ Ready in 1740ms
+✓ Running next.config.ts took 282ms
 - Cache Components enabled
 
- GET /auth/login 200 in 2.4s (next.js: 1748ms, proxy.ts: 20ms, application-code: 608ms)
-^C^C
+ GET /auth/login?next=%2Fadmin 200 in 1027ms (next.js: 497ms, proxy.ts: 11ms, application-code: 519ms)
+ GET /auth/login?next=%2Fadmin%2Fschedule 200 in 122ms (next.js: 30ms, proxy.ts: 13ms, application-code: 79ms)
+ GET /auth/login?next=%2Fadmin%2Fannouncements 200 in 106ms (next.js: 17ms, proxy.ts: 10ms, application-code: 79ms)
+ GET /auth/login 200 in 80ms (next.js: 11ms, proxy.ts: 11ms, application-code: 58ms)
+ GET / 200 in 1914ms (next.js: 236ms, proxy.ts: 7ms, application-code: 1672ms)
+ GET /auth/login 200 in 271ms (next.js: 79ms, proxy.ts: 28ms, application-code: 165ms)
+ GET / 200 in 2.2s (next.js: 414ms, proxy.ts: 1149ms, application-code: 612ms)
+ GET /chanda 200 in 237ms (next.js: 147ms, proxy.ts: 30ms, application-code: 61ms)
+ GET /admin 307 in 768ms (next.js: 173ms, proxy.ts: 16ms, application-code: 578ms)
+ GET / 200 in 237ms (next.js: 8ms, proxy.ts: 8ms, application-code: 221ms)

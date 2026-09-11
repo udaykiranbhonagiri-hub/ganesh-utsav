@@ -1,11 +1,8 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import Link from "next/link";
-import { useRouter } from "next/navigation";
-
-import { isSupaAdmin } from "@/lib/admin";
 import { createClient } from "@/lib/supabase/client";
+import Navbar from "@/components/Navbar";
 
 type Participant = {
   id: string;
@@ -22,105 +19,63 @@ type Team = {
 };
 
 export default function ParticipantsClient() {
-  const router = useRouter();
   const supabase = createClient();
 
   const [participants, setParticipants] = useState<Participant[]>([]);
   const [teams, setTeams] = useState<Team[]>([]);
-
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState("");
-  const [saving, setSaving] = useState<string | null>(null);
+  const [message, setMessage] = useState("");
 
   async function loadData() {
     setLoading(true);
-    setError("");
+    setMessage("");
 
-    try {
-      const {
-        data: { user },
-      } = await supabase.auth.getUser();
+    const [
+      { data: participantData, error: participantError },
+      { data: teamData, error: teamError },
+    ] = await Promise.all([
+      supabase
+        .from("participants")
+        .select("id, full_name, phone, room_number, team_id, created_at")
+        .order("created_at", { ascending: false }),
 
-      if (!user) {
-        router.replace("/auth/login?next=/admin/participants");
-        return;
-      }
+      supabase
+        .from("teams")
+        .select("id, name")
+        .order("name", { ascending: true }),
+    ]);
 
-      const { data: profile, error: profileError } =
-        await supabase
-          .from("profiles")
-          .select("role")
-          .eq("id", user.id)
-          .single();
-
-      if (profileError) {
-        throw profileError;
-      }
-
-      if (!isSupaAdmin(profile?.role)) {
-        router.replace("/");
-        return;
-      }
-
-      const [
-        { data: participantData, error: participantError },
-        { data: teamData, error: teamError },
-      ] = await Promise.all([
-        supabase
-          .from("participants")
-          .select(
-            "id, full_name, phone, room_number, team_id, created_at"
-          )
-          .order("created_at", { ascending: false }),
-
-        supabase
-          .from("teams")
-          .select("id, name")
-          .order("name", { ascending: true }),
-      ]);
-
-      if (participantError) {
-        throw participantError;
-      }
-
-      if (teamError) {
-        throw teamError;
-      }
-
-      setParticipants(participantData ?? []);
-      setTeams(teamData ?? []);
-    } catch (err) {
-      setError(
-        err instanceof Error
-          ? err.message
-          : "Unable to load participants."
-      );
-    } finally {
+    if (participantError) {
+      setMessage(participantError.message);
       setLoading(false);
+      return;
     }
+
+    if (teamError) {
+      setMessage(teamError.message);
+      setLoading(false);
+      return;
+    }
+
+    setParticipants(participantData ?? []);
+    setTeams(teamData ?? []);
+    setLoading(false);
   }
 
   useEffect(() => {
     loadData();
   }, []);
 
-  async function assignTeam(
-    participantId: string,
-    teamId: string
-  ) {
-    setSaving(participantId);
-    setError("");
-
-    const { error: updateError } = await supabase
+  async function updateTeam(participantId: string, teamId: string) {
+    const { error } = await supabase
       .from("participants")
       .update({
-        team_id: teamId === "none" ? null : teamId,
+        team_id: teamId || null,
       })
       .eq("id", participantId);
 
-    if (updateError) {
-      setError(updateError.message);
-      setSaving(null);
+    if (error) {
+      setMessage(error.message);
       return;
     }
 
@@ -129,187 +84,162 @@ export default function ParticipantsClient() {
         participant.id === participantId
           ? {
               ...participant,
-              team_id:
-                teamId === "none" ? null : teamId,
+              team_id: teamId || null,
             }
-          : participant
-      )
+          : participant,
+      ),
     );
 
-    setSaving(null);
+    setMessage("Team updated successfully.");
+  }
+
+  function getTeamName(teamId: string | null) {
+    if (!teamId) return "Unassigned";
+
+    return (
+      teams.find((team) => team.id === teamId)?.name ?? "Unknown team"
+    );
   }
 
   return (
-    <main className="min-h-screen bg-orange-50">
-      <header className="border-b bg-white">
-        <div className="mx-auto flex max-w-6xl items-center justify-between px-4 py-4 md:px-6">
-          <div>
-            <p className="text-sm font-semibold uppercase tracking-wider text-orange-600">
-              Ganesh Utsav 2026
+    <>
+      <Navbar />
+
+      <main className="min-h-screen bg-orange-50 px-4 py-8">
+        <div className="mx-auto max-w-7xl">
+          <div className="mb-8">
+            <p className="text-sm font-semibold uppercase tracking-[0.2em] text-orange-600">
+              Admin Panel
             </p>
 
-            <h1 className="text-xl font-bold text-gray-900">
-              Admin — Participants
-            </h1>
-          </div>
+            <div className="mt-2 flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+              <div>
+                <h1 className="text-3xl font-black tracking-tight text-gray-900 sm:text-4xl">
+                  Participants
+                </h1>
 
-          <Link
-            href="/admin"
-            className="rounded-xl border border-orange-200 px-4 py-2 font-semibold text-orange-700 hover:bg-orange-50"
-          >
-            Dashboard
-          </Link>
-        </div>
-      </header>
+                <p className="mt-2 text-gray-600">
+                  Manage registered participants and assign teams.
+                </p>
+              </div>
 
-      <section className="px-4 py-8 md:px-6">
-        <div className="mx-auto max-w-6xl">
-          <Link
-            href="/admin"
-            className="text-sm font-medium text-orange-700 hover:underline"
-          >
-            ← Admin Dashboard
-          </Link>
+              <div className="rounded-2xl bg-white px-5 py-3 shadow-sm ring-1 ring-orange-100">
+                <p className="text-xs font-semibold uppercase tracking-wider text-gray-500">
+                  Total Participants
+                </p>
 
-          <div className="mt-6 flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
-            <div>
-              <p className="text-sm font-semibold uppercase tracking-wider text-orange-600">
-                Event Management
-              </p>
-
-              <h2 className="mt-1 text-3xl font-bold text-gray-900">
-                Participants
-              </h2>
-
-              <p className="mt-2 text-gray-600">
-                Manage people registered for games.
-              </p>
-            </div>
-
-            <div className="rounded-xl bg-white px-5 py-3 shadow">
-              <p className="text-sm text-gray-500">
-                Total Participants
-              </p>
-
-              <p className="text-2xl font-bold text-orange-600">
-                {participants.length}
-              </p>
+                <p className="mt-1 text-2xl font-black text-orange-600">
+                  {participants.length}
+                </p>
+              </div>
             </div>
           </div>
 
-          {error && (
-            <div className="mt-6 rounded-xl bg-red-50 p-4 text-sm text-red-700">
-              {error}
+          {message && (
+            <div className="mb-6 rounded-2xl border border-orange-200 bg-white px-4 py-3 text-sm text-gray-700">
+              {message}
             </div>
           )}
 
-          <div className="mt-8 overflow-hidden rounded-2xl bg-white shadow">
-            {loading ? (
-              <div className="p-10 text-center text-gray-500">
-                Loading participants...
-              </div>
-            ) : participants.length === 0 ? (
-              <div className="p-10 text-center">
-                <p className="font-semibold text-gray-800">
-                  No participants registered yet.
-                </p>
+          {loading ? (
+            <div className="rounded-3xl bg-white p-10 text-center shadow-sm ring-1 ring-orange-100">
+              <p className="text-gray-600">Loading participants...</p>
+            </div>
+          ) : participants.length === 0 ? (
+            <div className="rounded-3xl bg-white p-10 text-center shadow-sm ring-1 ring-orange-100">
+              <h2 className="text-xl font-bold text-gray-900">
+                No participants yet
+              </h2>
 
-                <p className="mt-2 text-sm text-gray-500">
-                  People who register for games will appear here.
-                </p>
-              </div>
-            ) : (
+              <p className="mt-2 text-gray-600">
+                Participants will appear here after they register for a game.
+              </p>
+            </div>
+          ) : (
+            <div className="overflow-hidden rounded-3xl bg-white shadow-sm ring-1 ring-orange-100">
               <div className="overflow-x-auto">
-                <table className="w-full min-w-[850px]">
-                  <thead className="bg-gray-50">
+                <table className="min-w-full">
+                  <thead className="border-b border-orange-100 bg-orange-50">
                     <tr>
-                      <th className="px-6 py-4 text-left text-sm font-semibold">
+                      <th className="px-5 py-4 text-left text-xs font-bold uppercase tracking-wider text-gray-500">
                         Name
                       </th>
 
-                      <th className="px-6 py-4 text-left text-sm font-semibold">
+                      <th className="px-5 py-4 text-left text-xs font-bold uppercase tracking-wider text-gray-500">
                         Phone
                       </th>
 
-                      <th className="px-6 py-4 text-left text-sm font-semibold">
+                      <th className="px-5 py-4 text-left text-xs font-bold uppercase tracking-wider text-gray-500">
                         Room
                       </th>
 
-                      <th className="px-6 py-4 text-left text-sm font-semibold">
+                      <th className="px-5 py-4 text-left text-xs font-bold uppercase tracking-wider text-gray-500">
                         Team
                       </th>
 
-                      <th className="px-6 py-4 text-left text-sm font-semibold">
+                      <th className="px-5 py-4 text-left text-xs font-bold uppercase tracking-wider text-gray-500">
                         Registered
                       </th>
                     </tr>
                   </thead>
 
-                  <tbody>
-                    {participants.map((participant) => {
-                      return (
-                        <tr
-                          key={participant.id}
-                          className="border-t"
-                        >
-                          <td className="px-6 py-4 font-medium">
-                            {participant.full_name}
-                          </td>
+                  <tbody className="divide-y divide-gray-100">
+                    {participants.map((participant) => (
+                      <tr
+                        key={participant.id}
+                        className="transition hover:bg-orange-50/50"
+                      >
+                        <td className="px-5 py-4 font-semibold text-gray-900">
+                          {participant.full_name}
+                        </td>
 
-                          <td className="px-6 py-4 text-gray-600">
-                            {participant.phone}
-                          </td>
+                        <td className="px-5 py-4 text-gray-600">
+                          {participant.phone}
+                        </td>
 
-                          <td className="px-6 py-4 text-gray-600">
-                            {participant.room_number || "-"}
-                          </td>
+                        <td className="px-5 py-4 text-gray-600">
+                          {participant.room_number || "—"}
+                        </td>
 
-                          <td className="px-6 py-4">
-                            <select
-                              value={
-                                participant.team_id ?? "none"
-                              }
-                              disabled={
-                                saving === participant.id
-                              }
-                              onChange={(e) =>
-                                assignTeam(
-                                  participant.id,
-                                  e.target.value
-                                )
-                              }
-                              className="rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm outline-none focus:border-orange-500"
-                            >
-                              <option value="none">
-                                No Team
+                        <td className="px-5 py-4">
+                          <select
+                            value={participant.team_id ?? ""}
+                            onChange={(event) =>
+                              updateTeam(
+                                participant.id,
+                                event.target.value,
+                              )
+                            }
+                            className="rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm font-medium text-gray-800 outline-none transition focus:border-orange-400 focus:ring-2 focus:ring-orange-100"
+                          >
+                            <option value="">Unassigned</option>
+
+                            {teams.map((team) => (
+                              <option key={team.id} value={team.id}>
+                                {team.name}
                               </option>
+                            ))}
+                          </select>
 
-                              {teams.map((team) => (
-                                <option
-                                  key={team.id}
-                                  value={team.id}
-                                >
-                                  {team.name}
-                                </option>
-                              ))}
-                            </select>
-                          </td>
+                          <p className="mt-1 text-xs text-gray-400">
+                            {getTeamName(participant.team_id)}
+                          </p>
+                        </td>
 
-                          <td className="px-6 py-4 text-sm text-gray-500">
-                            {new Date(
-                              participant.created_at
-                            ).toLocaleString("en-IN")}
-                          </td>
-                        </tr>
-                      );
-                    })}
+                        <td className="px-5 py-4 text-sm text-gray-500">
+                          {new Date(
+                            participant.created_at,
+                          ).toLocaleDateString("en-IN")}
+                        </td>
+                      </tr>
+                    ))}
                   </tbody>
                 </table>
               </div>
-            )}
-          </div>
+            </div>
+          )}
         </div>
-      </section>
-    </main>
+      </main>
+    </>
   );
 }
