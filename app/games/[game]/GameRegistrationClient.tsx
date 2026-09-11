@@ -20,18 +20,9 @@ type Props = {
   gameSlug: string;
 };
 
-const gameNames: Record<string, string> = {
-  chess: "Chess",
-  cricket: "Cricket",
-  carrom: "Carrom",
-  quiz: "Quiz",
-  fun: "Fun Games",
-};
-
 export default function GameRegistrationClient({ gameSlug }: Props) {
   const router = useRouter();
   const supabase = useMemo(() => createClient(), []);
-  const displayName = gameNames[gameSlug];
   const registrationPath = `/register?next=${encodeURIComponent(
     `/games/${gameSlug}`,
   )}`;
@@ -50,18 +41,13 @@ export default function GameRegistrationClient({ gameSlug }: Props) {
   }, []);
 
   useEffect(() => {
-    if (!displayName) {
-      router.replace("/games");
-      return;
-    }
-
     async function loadGame() {
       const { data, error: gameError } = await supabase
         .from("games")
         .select(
           "id, name, game_type, description, max_players, registration_open",
         )
-        .eq("name", displayName)
+        .eq("slug", gameSlug)
         .maybeSingle();
 
       if (gameError) {
@@ -71,7 +57,7 @@ export default function GameRegistrationClient({ gameSlug }: Props) {
       }
 
       if (!data) {
-        setError("This game has not been configured yet.");
+        setError("This game does not exist yet. Check back soon.");
         setLoading(false);
         return;
       }
@@ -81,7 +67,7 @@ export default function GameRegistrationClient({ gameSlug }: Props) {
     }
 
     loadGame();
-  }, [displayName, router, supabase]);
+  }, [gameSlug, router, supabase]);
 
   async function handleRegister(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -167,7 +153,7 @@ export default function GameRegistrationClient({ gameSlug }: Props) {
             </p>
 
             <h1 className="mt-2 text-3xl font-bold text-gray-900">
-              {displayName || "Game"}
+              {game?.name || "Game"}
             </h1>
 
             {loading ? (

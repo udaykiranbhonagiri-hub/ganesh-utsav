@@ -1,6 +1,7 @@
 "use client";
 
 import { cn } from "@/lib/utils";
+import { isSupaAdmin } from "@/lib/admin";
 import { createClient } from "@/lib/supabase/client";
 import { Button } from "@/components/ui/button";
 import {
@@ -54,12 +55,9 @@ export function LoginForm({
         .eq("id", data.user.id)
         .maybeSingle();
 
-      const isAdmin =
-        profile?.role === "super_admin" || profile?.role === "event_admin";
-
-      if (profileError || !isAdmin) {
+      if (profileError || !isSupaAdmin(profile?.role)) {
         await supabase.auth.signOut();
-        throw new Error("This login is only available to event administrators.");
+        throw new Error("This login is only available to the supa_admin account.");
       }
 
       router.replace(destination);

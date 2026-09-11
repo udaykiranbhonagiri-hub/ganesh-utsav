@@ -1,18 +1,6 @@
 import GameRegistrationClient from "./GameRegistrationClient";
 
-const games = [
-  "chess",
-  "cricket",
-  "carrom",
-  "quiz",
-  "fun",
-];
-
-export function generateStaticParams() {
-  return games.map((game) => ({
-    game,
-  }));
-}
+export const instant = false;
 
 type Props = {
   params: Promise<{

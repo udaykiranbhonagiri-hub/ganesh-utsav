@@ -1,49 +1,31 @@
 import Link from "next/link";
 
-const games = [
-  {
-    id: "chess",
-    name: "Chess",
-    icon: "♟️",
-    description:
-      "Individual chess tournament between hostel participants.",
-    format: "Individual",
-  },
-  {
-    id: "cricket",
-    name: "Cricket",
-    icon: "🏏",
-    description:
-      "Short-format team cricket competition.",
-    format: "Team",
-  },
-  {
-    id: "carrom",
-    name: "Carrom",
-    icon: "🎯",
-    description:
-      "Friendly carrom competition.",
-    format: "Individual / Team",
-  },
-  {
-    id: "quiz",
-    name: "Quiz",
-    icon: "🧠",
-    description:
-      "General knowledge and Ganesh Utsav quiz.",
-    format: "Team",
-  },
-  {
-    id: "fun",
-    name: "Fun Games",
-    icon: "🎮",
-    description:
-      "Simple games and activities for everyone.",
-    format: "Team / Individual",
-  },
-];
+import { createClient } from "@/lib/supabase/server";
 
-export default function GamesPage() {
+export const instant = false;
+
+type Game = {
+  id: string;
+  name: string;
+  slug: string;
+  game_type: string;
+  description: string | null;
+  icon: string | null;
+  registration_open: boolean;
+};
+
+export default async function GamesPage() {
+  const supabase = await createClient();
+
+  const { data, error } = await supabase
+    .from("games")
+    .select(
+      "id, name, slug, game_type, description, icon, registration_open",
+    )
+    .order("name", { ascending: true });
+
+  const games: Game[] = data ?? [];
+
   return (
     <main className="min-h-screen bg-orange-50">
       {/* Header */}
@@ -108,38 +90,70 @@ export default function GamesPage() {
 
       {/* Games */}
       <section className="px-6 pb-16">
-        <div className="mx-auto grid max-w-6xl gap-5 md:grid-cols-2 lg:grid-cols-3">
-          {games.map((game) => (
-            <article
-              key={game.id}
-              className="rounded-2xl bg-white p-6 shadow transition hover:-translate-y-1 hover:shadow-lg"
-            >
-              <div className="flex items-start justify-between">
-                <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-orange-100 text-3xl">
-                  {game.icon}
-                </div>
-
-                <span className="rounded-full bg-orange-50 px-3 py-1 text-xs font-semibold text-orange-700">
-                  {game.format}
-                </span>
-              </div>
-
-              <h2 className="mt-5 text-2xl font-bold text-gray-900">
-                {game.name}
-              </h2>
-
-              <p className="mt-2 leading-6 text-gray-600">
-                {game.description}
+        <div className="mx-auto max-w-6xl">
+          {error ? (
+            <div className="rounded-2xl bg-red-50 p-5 text-red-700">
+              Unable to load games. Please try again later.
+            </div>
+          ) : games.length === 0 ? (
+            <div className="rounded-2xl bg-white p-10 text-center shadow">
+              <p className="text-lg font-semibold text-gray-800">
+                Games are being prepared.
               </p>
 
-              <Link
-                href={`/games/${game.id}`}
-                className="mt-5 inline-block rounded-xl bg-orange-600 px-4 py-2.5 font-semibold text-white hover:bg-orange-700"
-              >
-                Register
-              </Link>
-            </article>
-          ))}
+              <p className="mt-2 text-sm text-gray-500">
+                New games will appear here once the organisers add them.
+              </p>
+            </div>
+          ) : (
+            <div className="grid gap-5 md:grid-cols-2 lg:grid-cols-3">
+              {games.map((game) => (
+                <article
+                  key={game.id}
+                  className="rounded-2xl bg-white p-6 shadow transition hover:-translate-y-1 hover:shadow-lg"
+                >
+                  <div className="flex items-start justify-between">
+                    <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-orange-100 text-3xl">
+                      {game.icon || "🎮"}
+                    </div>
+
+                    <span className="rounded-full bg-orange-50 px-3 py-1 text-xs font-semibold text-orange-700">
+                      {game.game_type}
+                    </span>
+                  </div>
+
+                  <h2 className="mt-5 text-2xl font-bold text-gray-900">
+                    {game.name}
+                  </h2>
+
+                  {game.description && (
+                    <p className="mt-2 leading-6 text-gray-600">
+                      {game.description}
+                    </p>
+                  )}
+
+                  <span
+                    className={`mt-4 inline-flex items-center gap-1 text-sm font-semibold ${
+                      game.registration_open
+                        ? "text-green-700"
+                        : "text-red-600"
+                    }`}
+                  >
+                    {game.registration_open
+                      ? "● Registration open"
+                      : "● Registration closed"}
+                  </span>
+
+                  <Link
+                    href={`/games/${game.slug}`}
+                    className="mt-5 inline-block rounded-xl bg-orange-600 px-4 py-2.5 font-semibold text-white hover:bg-orange-700"
+                  >
+                    Register
+                  </Link>
+                </article>
+              ))}
+            </div>
+          )}
         </div>
       </section>
 

@@ -1,10 +1,10 @@
 import { Suspense } from "react";
 
-import ParticipantsClient from "./ParticipantsClient";
+import GamesClient from "./GamesClient";
 
 export const instant = false;
 
-export default function AdminParticipantsPage() {
+export default function AdminGamesPage() {
   return (
     <Suspense
       fallback={
@@ -13,7 +13,7 @@ export default function AdminParticipantsPage() {
         </main>
       }
     >
-      <ParticipantsClient />
+      <GamesClient />
     </Suspense>
   );
 }
