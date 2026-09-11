@@ -1,0 +1,14 @@
+
+> dev
+> next dev
+
+▲ Next.js 16.3.4 (Turbopack)
+- Local:         http://localhost:3000
+- Network:       http://192.168.137.1:3000
+- Environments: .env.local
+✓ Ready in 1388ms
+✓ Running next.config.ts took 199ms
+- Cache Components enabled
+
+ GET /auth/login 200 in 2.4s (next.js: 1748ms, proxy.ts: 20ms, application-code: 608ms)
+^C^C
