@@ -56,7 +56,7 @@ export default function ChandaPage() {
    * NPCI UPI deep-link specifications define `tr` as a
    * transaction reference ID.
    */
-  const upiIntentUrl = useMemo(() => {
+  const upiUrl = useMemo(() => {
   if (!UPI_ID || !hasValidAmount) {
     return "";
   }
@@ -273,19 +273,39 @@ export default function ChandaPage() {
                 </p>
 
                 {/* UPI Intent button */}
-                {upiIntentUrl && (
-                <a href={upiIntentUrl}
-                className="mt-4 inline-flex w-full items-center justify-center rounded-xl bg-orange-600 px-5 py-3 font-semibold text-white hover:bg-orange-700">
-                    Pay ₹{numericAmount.toFixed(2)} with UPI
-                </a>
-                )}
+                {upiUrl && (
+  <div className="mt-4 space-y-3">
+    <a
+      href={upiUrl}
+      className="flex w-full items-center justify-center rounded-xl bg-orange-600 px-5 py-3 font-semibold text-white transition hover:bg-orange-700"
+    >
+      Pay ₹{numericAmount.toFixed(2)} with UPI
+    </a>
 
-                {upiIntentUrl && (
-                  <p className="mt-3 text-xs text-gray-500">
-                    This opens an installed UPI app using a unique
-                    transaction reference for this payment attempt.
-                  </p>
-                )}
+    <button
+      type="button"
+      onClick={async () => {
+        try {
+          await navigator.clipboard.writeText(UPI_ID);
+
+          alert(
+            `UPI ID copied: ${UPI_ID}\n\nOpen your UPI app and pay ₹${numericAmount.toFixed(2)}.`
+          );
+        } catch {
+          alert(`UPI ID: ${UPI_ID}`);
+        }
+      }}
+      className="w-full rounded-xl border border-orange-300 bg-white px-5 py-3 font-semibold text-orange-700 transition hover:bg-orange-50"
+    >
+      Copy UPI ID
+    </button>
+
+    <p className="text-center text-xs leading-5 text-gray-500">
+      If your UPI app declines the direct payment, copy the UPI ID
+      and make the payment from your UPI app manually.
+    </p>
+  </div>
+)}
 
               </div>
             </div>
