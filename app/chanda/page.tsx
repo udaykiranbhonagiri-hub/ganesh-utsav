@@ -275,13 +275,6 @@ export default function ChandaPage() {
                 {/* UPI Intent button */}
                 {upiUrl && (
   <div className="mt-4 space-y-3">
-    <a
-      href={upiUrl}
-      className="flex w-full items-center justify-center rounded-xl bg-orange-600 px-5 py-3 font-semibold text-white transition hover:bg-orange-700"
-    >
-      Pay ₹{numericAmount.toFixed(2)} with UPI
-    </a>
-
     <button
       type="button"
       onClick={async () => {
@@ -289,20 +282,39 @@ export default function ChandaPage() {
           await navigator.clipboard.writeText(UPI_ID);
 
           alert(
-            `UPI ID copied: ${UPI_ID}\n\nOpen your UPI app and pay ₹${numericAmount.toFixed(2)}.`
+            `UPI ID copied: ${UPI_ID}\n\n` +
+            `Open Google Pay, PhonePe, or Paytm and pay ₹${numericAmount.toFixed(
+              2
+            )} to this UPI ID.`
           );
         } catch {
-          alert(`UPI ID: ${UPI_ID}`);
+          alert(
+            `Pay ₹${numericAmount.toFixed(2)} to UPI ID:\n${UPI_ID}`
+          );
         }
+      }}
+      className="flex w-full items-center justify-center rounded-xl bg-orange-600 px-5 py-3 font-semibold text-white transition hover:bg-orange-700"
+    >
+      Copy UPI ID & Pay
+    </button>
+
+    <button
+      type="button"
+      onClick={() => {
+        window.prompt(
+          `Pay ₹${numericAmount.toFixed(2)} to this UPI ID:`,
+          UPI_ID
+        );
       }}
       className="w-full rounded-xl border border-orange-300 bg-white px-5 py-3 font-semibold text-orange-700 transition hover:bg-orange-50"
     >
-      Copy UPI ID
+      Show UPI ID
     </button>
 
     <p className="text-center text-xs leading-5 text-gray-500">
-      If your UPI app declines the direct payment, copy the UPI ID
-      and make the payment from your UPI app manually.
+      Pay ₹{numericAmount.toFixed(2)} manually using your UPI app with the
+      UPI ID above. After payment, enter the UTR / transaction reference
+      below.
     </p>
   </div>
 )}
