@@ -1,6 +1,6 @@
 "use client";
 
-import { FormEvent, useState } from "react";
+import { FormEvent, useMemo, useState } from "react";
 import Link from "next/link";
 import { QRCodeSVG } from "qrcode.react";
 import { createClient } from "@/lib/supabase/client";
@@ -21,24 +21,64 @@ export default function ChandaPage() {
   const [success, setSuccess] = useState(false);
   const [error, setError] = useState("");
 
-  /*
-   * Dynamic UPI payment URL.
-   * The QR changes automatically when the amount changes.
-   */
   const numericAmount = Number(amount);
-  const hasValidAmount = Number.isFinite(numericAmount) && numericAmount > 0;
-  const upiUrl =
-    UPI_ID && hasValidAmount
-      ? `upi://pay?pa=${encodeURIComponent(
-          UPI_ID
-        )}&pn=${encodeURIComponent(
-          UPI_NAME
-        )}&am=${encodeURIComponent(
-          numericAmount.toFixed(2)
-        )}&cu=INR`
-      : "";
 
-  async function handleSubmit(event: FormEvent<HTMLFormElement>) {
+  const hasValidAmount =
+    Number.isFinite(numericAmount) && numericAmount > 0;
+
+  /*
+   * QR payment URL.
+   *
+   * Keep this simple because your existing QR flow is already
+   * successfully completing payments.
+   */
+  const qrUrl = useMemo(() => {
+    if (!UPI_ID || !hasValidAmount) {
+      return "";
+    }
+
+    const params = new URLSearchParams({
+      pa: UPI_ID,
+      pn: UPI_NAME,
+      am: numericAmount.toFixed(2),
+      cu: "INR",
+    });
+
+    return `upi://pay?${params.toString()}`;
+  }, [numericAmount, hasValidAmount]);
+
+  /*
+   * Browser-launched UPI intent.
+   *
+   * Add a unique transaction reference so the intent represents
+   * a specific payment attempt.
+   *
+   * NPCI UPI deep-link specifications define `tr` as a
+   * transaction reference ID.
+   */
+  const intentUrl = useMemo(() => {
+    if (!UPI_ID || !hasValidAmount) {
+      return "";
+    }
+
+    const transactionReference =
+      `CHANDA${Date.now()}`.slice(0, 35);
+
+    const params = new URLSearchParams({
+      pa: UPI_ID,
+      pn: UPI_NAME,
+      tr: transactionReference,
+      tn: "Ganesh Utsav Chanda",
+      am: numericAmount.toFixed(2),
+      cu: "INR",
+    });
+
+    return `upi://pay?${params.toString()}`;
+  }, [numericAmount, hasValidAmount]);
+
+  async function handleSubmit(
+    event: FormEvent<HTMLFormElement>
+  ) {
     event.preventDefault();
 
     setLoading(true);
@@ -46,18 +86,23 @@ export default function ChandaPage() {
     setSuccess(false);
 
     try {
-      const numericAmount = Number(amount);
+      const contributionAmount = Number(amount);
 
       if (!name.trim()) {
         throw new Error("Please enter your name.");
       }
 
-      if (!Number.isFinite(numericAmount) || numericAmount <= 0) {
+      if (
+        !Number.isFinite(contributionAmount) ||
+        contributionAmount <= 0
+      ) {
         throw new Error("Please enter a valid Chanda amount.");
       }
 
       if (!utr.trim()) {
-        throw new Error("Please enter the UTR / transaction ID.");
+        throw new Error(
+          "Please enter the UTR / transaction ID."
+        );
       }
 
       const { error: insertError } = await supabase
@@ -65,7 +110,7 @@ export default function ChandaPage() {
         .insert({
           contributor_name: name.trim(),
           phone: phone.trim() || null,
-          amount: numericAmount,
+          amount: contributionAmount,
           utr_number: utr.trim(),
           payment_method: "upi",
         });
@@ -75,7 +120,6 @@ export default function ChandaPage() {
       }
 
       setSuccess(true);
-
       setName("");
       setPhone("");
       setAmount("");
@@ -94,6 +138,7 @@ export default function ChandaPage() {
   return (
     <main className="min-h-screen bg-orange-50 px-4 py-8">
       <div className="mx-auto max-w-2xl">
+
         {/* Back */}
         <Link
           href="/"
@@ -104,6 +149,7 @@ export default function ChandaPage() {
 
         {/* Main Card */}
         <section className="mt-5 overflow-hidden rounded-3xl bg-white shadow-lg">
+
           {/* Header */}
           <div className="bg-orange-600 px-6 py-8 text-white">
             <p className="text-sm font-medium uppercase tracking-wider">
@@ -120,15 +166,17 @@ export default function ChandaPage() {
           </div>
 
           <div className="p-6">
-            {/* Amount + QR Section */}
+
+            {/* Amount + QR */}
             <div className="rounded-2xl bg-orange-50 p-5">
+
               <h2 className="text-xl font-bold text-gray-900">
                 Make a Contribution
               </h2>
 
               <p className="mt-2 text-sm text-gray-600">
-                Enter the amount, then scan the QR code or open an installed
-                UPI app to make your payment.
+                Enter the amount, then scan the QR code or open an
+                installed UPI app to make your payment.
               </p>
 
               {/* Amount */}
@@ -164,20 +212,22 @@ export default function ChandaPage() {
 
                 {/* Quick Amount Buttons */}
                 <div className="mt-3 grid grid-cols-5 gap-2">
-                  {[50, 100, 200, 500, 1000].map((value) => (
-                    <button
-                      key={value}
-                      type="button"
-                      onClick={() => {
-                        setAmount(String(value));
-                        setSuccess(false);
-                        setError("");
-                      }}
-                      className="rounded-lg border border-orange-300 bg-white px-2 py-2 text-sm font-semibold text-orange-700 hover:bg-orange-100"
-                    >
-                      ₹{value}
-                    </button>
-                  ))}
+                  {[50, 100, 200, 500, 1000].map(
+                    (value) => (
+                      <button
+                        key={value}
+                        type="button"
+                        onClick={() => {
+                          setAmount(String(value));
+                          setSuccess(false);
+                          setError("");
+                        }}
+                        className="rounded-lg border border-orange-300 bg-white px-2 py-2 text-sm font-semibold text-orange-700 hover:bg-orange-100"
+                      >
+                        ₹{value}
+                      </button>
+                    )
+                  )}
                 </div>
               </div>
 
@@ -186,19 +236,20 @@ export default function ChandaPage() {
                 <div className="mx-auto flex h-64 w-64 items-center justify-center rounded-2xl border bg-white p-4">
                   {!UPI_ID ? (
                     <p className="px-6 text-center text-sm text-red-600">
-                      UPI payments have not been configured yet. Please contact
-                      an organizer.
+                      UPI payments have not been configured yet.
+                      Please contact an organizer.
                     </p>
-                  ) : upiUrl ? (
+                  ) : qrUrl ? (
                     <QRCodeSVG
-                      value={upiUrl}
+                      value={qrUrl}
                       size={220}
                       level="M"
                       includeMargin
                     />
                   ) : (
                     <p className="px-6 text-center text-sm text-gray-500">
-                      Enter a valid Chanda amount to generate the payment QR.
+                      Enter a valid Chanda amount to generate the
+                      payment QR.
                     </p>
                   )}
                 </div>
@@ -206,6 +257,7 @@ export default function ChandaPage() {
 
               {/* UPI ID */}
               <div className="mt-5 rounded-xl bg-white p-4 text-center">
+
                 <p className="text-sm text-gray-500">
                   UPI ID
                 </p>
@@ -219,21 +271,24 @@ export default function ChandaPage() {
                   payment, then enter your transaction details below.
                 </p>
 
-                {upiUrl && (
+                {/* UPI Intent button */}
+                {intentUrl && (
                   <a
-                    href={upiUrl}
+                    href={intentUrl}
                     className="mt-4 inline-flex rounded-xl bg-orange-600 px-5 py-3 font-semibold text-white hover:bg-orange-700"
                   >
-                    Open UPI app to pay ₹{numericAmount.toFixed(2)}
+                    Open UPI app to pay ₹
+                    {numericAmount.toFixed(2)}
                   </a>
                 )}
 
-                {upiUrl && (
+                {intentUrl && (
                   <p className="mt-3 text-xs text-gray-500">
-                    On a mobile phone, this opens an installed UPI app such as
-                    Google Pay, PhonePe, Paytm, or BHIM.
+                    This opens an installed UPI app using a unique
+                    transaction reference for this payment attempt.
                   </p>
                 )}
+
               </div>
             </div>
 
@@ -245,6 +300,7 @@ export default function ChandaPage() {
               onSubmit={handleSubmit}
               className="space-y-5"
             >
+
               <div>
                 <h2 className="text-xl font-bold text-gray-900">
                   Payment Details
@@ -355,6 +411,7 @@ export default function ChandaPage() {
               >
                 {loading ? "Recording..." : "I Have Paid"}
               </button>
+
             </form>
           </div>
         </section>
