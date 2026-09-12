@@ -56,25 +56,26 @@ export default function ChandaPage() {
    * NPCI UPI deep-link specifications define `tr` as a
    * transaction reference ID.
    */
-  const intentUrl = useMemo(() => {
-    if (!UPI_ID || !hasValidAmount) {
-      return "";
-    }
+  const upiIntentUrl = useMemo(() => {
+  if (!UPI_ID || !hasValidAmount) {
+    return "";
+  }
 
-    const transactionReference =
-      `CHANDA${Date.now()}`.slice(0, 35);
+  const params = new URLSearchParams({
+    pa: UPI_ID,
+    pn: UPI_NAME,
+    am: numericAmount.toFixed(2),
+    cu: "INR",
+    tn: "Ganesh Utsav Chanda",
+  });
 
-    const params = new URLSearchParams({
-      pa: UPI_ID,
-      pn: UPI_NAME,
-      tr: transactionReference,
-      tn: "Ganesh Utsav Chanda",
-      am: numericAmount.toFixed(2),
-      cu: "INR",
-    });
+  const upiPaymentUrl = `upi://pay?${params.toString()}`;
 
-    return `upi://pay?${params.toString()}`;
-  }, [numericAmount, hasValidAmount]);
+  return `intent://${upiPaymentUrl.replace(
+    "upi://",
+    ""
+  )}#Intent;scheme=upi;end`;
+}, [numericAmount, hasValidAmount]);
 
   async function handleSubmit(
     event: FormEvent<HTMLFormElement>
@@ -272,17 +273,16 @@ export default function ChandaPage() {
                 </p>
 
                 {/* UPI Intent button */}
-                {intentUrl && (
-                  <a
-                    href={intentUrl}
-                    className="mt-4 inline-flex rounded-xl bg-orange-600 px-5 py-3 font-semibold text-white hover:bg-orange-700"
-                  >
-                    Open UPI app to pay ₹
-                    {numericAmount.toFixed(2)}
-                  </a>
-                )}
+                {upiIntentUrl && (
+  <a
+    href={upiIntentUrl}
+    className="mt-4 inline-flex w-full items-center justify-center rounded-xl bg-orange-600 px-5 py-3 font-semibold text-white transition hover:bg-orange-700"
+  >
+    Pay ₹{numericAmount.toFixed(2)} with UPI
+  </a>
+)}
 
-                {intentUrl && (
+                {upiIntentUrl && (
                   <p className="mt-3 text-xs text-gray-500">
                     This opens an installed UPI app using a unique
                     transaction reference for this payment attempt.
