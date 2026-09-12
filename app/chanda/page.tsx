@@ -274,13 +274,11 @@ export default function ChandaPage() {
 
                 {/* UPI Intent button */}
                 {upiIntentUrl && (
-  <a
-    href={upiIntentUrl}
-    className="mt-4 inline-flex w-full items-center justify-center rounded-xl bg-orange-600 px-5 py-3 font-semibold text-white transition hover:bg-orange-700"
-  >
-    Pay ₹{numericAmount.toFixed(2)} with UPI
-  </a>
-)}
+                <a href={upiIntentUrl}
+                className="mt-4 inline-flex w-full items-center justify-center rounded-xl bg-orange-600 px-5 py-3 font-semibold text-white hover:bg-orange-700">
+                    Pay ₹{numericAmount.toFixed(2)} with UPI
+                </a>
+                )}
 
                 {upiIntentUrl && (
                   <p className="mt-3 text-xs text-gray-500">
