@@ -18,72 +18,7 @@ type Game = {
   game_type: string | null;
 };
 
-const fallbackGames: Game[] = [
-  {
-    id: "chess",
-    name: "Chess",
-    slug: "chess",
-    description: "Individual chess tournament",
-    game_type: "chess",
-  },
-  {
-    id: "cricket",
-    name: "Cricket",
-    slug: "cricket",
-    description: "Hostel cricket competition",
-    game_type: "cricket",
-  },
-  {
-    id: "carrom",
-    name: "Carrom",
-    slug: "carrom",
-    description: "Carrom singles or doubles competition",
-    game_type: "carrom",
-  },
-  {
-    id: "freefire",
-    name: "Free Fire",
-    slug: "freefire",
-    description: "Mobile esports competition",
-    game_type: "freefire",
-  },
-  {
-    id: "quiz",
-    name: "Quiz",
-    slug: "quiz",
-    description: "General knowledge and hostel quiz",
-    game_type: "quiz",
-  },
-  {
-    id: "fun",
-    name: "Fun Games",
-    slug: "fun",
-    description: "Fun and entertaining hostel challenges",
-    game_type: "fun",
-  },
-  {
-    id: "smashkarts",
-    name: "Smash Karts",
-    slug: "smashkarts",
-    description: "Fast-paced kart battle competition",
-    game_type: "smashkarts",
-  },
-  {
-    id: "uno",
-    name: "UNO",
-    slug: "uno",
-    description: "UNO card competition",
-    game_type: "uno",
-  },
-  {
-    id: "rummy",
-    name: "Rummy",
-    slug: "rummy",
-    description:
-      "Friendly festival card game with no cash wagering",
-    game_type: "rummy",
-  },
-];
+
 
 function RegisterContent() {
   const searchParams = useSearchParams();
@@ -127,40 +62,46 @@ function RegisterContent() {
     loadGames();
   }, []);
 
-  async function loadGames() {
-    setLoadingGames(true);
+async function loadGames() {
+  setLoadingGames(true);
+  setError("");
 
-    const { data, error: gamesError } = await supabase
-      .from("games")
-      .select("id,name,slug,description,game_type")
-      .eq("registration_open", true)
-      .order("created_at", { ascending: true });
+  const { data, error } = await supabase
+    .from("games")
+    .select("id,name,slug,description,game_type")
+    .eq("registration_open", true)
+    .order("created_at", { ascending: true });
 
-    if (gamesError || !data || data.length === 0) {
-      setGames(fallbackGames);
-
-      if (initialGame) {
-        const exists = fallbackGames.some(
-          (game) => game.slug === initialGame
-        );
-
-        if (!exists) {
-          setSelectedGames([]);
-        }
-      }
-    } else {
-      setGames(data);
-
-      if (
-        initialGame &&
-        !data.some((game) => game.slug === initialGame)
-      ) {
-        setSelectedGames([]);
-      }
-    }
-
+  if (error) {
+    console.error("Failed to load games:", error);
+    setGames([]);
+    setError(
+      `Unable to load games: ${error.message}`
+    );
     setLoadingGames(false);
+    return;
   }
+
+  if (!data || data.length === 0) {
+    setGames([]);
+    setError(
+      "No games are currently open for registration."
+    );
+    setLoadingGames(false);
+    return;
+  }
+
+  setGames(data);
+
+  if (
+    initialGame &&
+    !data.some((game) => game.slug === initialGame)
+  ) {
+    setSelectedGames([]);
+  }
+
+  setLoadingGames(false);
+}
 
   function toggleGame(slug: string) {
     setSelectedGames((current) =>
